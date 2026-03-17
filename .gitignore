@@ -1,5 +1,39 @@
+# ── Dependencies ──────────────────────────────────────────────────────────────
 node_modules/
+
+# ── Environment variables — NEVER commit these ────────────────────────────────
+# Matches .env in root, server/.env, any nested .env
 .env
+.env.*
+!.env.example
+!.env.*.example
+
+# ── Build output ──────────────────────────────────────────────────────────────
 dist/
-.DS_Store
+build/
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
 *.log
+logs/
+server.log
+
+# ── macOS junk ────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V7
+.Trashes
+
+# ── PostgreSQL data directory — contains your live database files ─────────────
+# (only relevant if someone accidentally puts the data dir inside the repo)
+**/postgresql/
+**/var/postgresql*/
+
+# ── Editor / IDE ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+Thumbs.db
