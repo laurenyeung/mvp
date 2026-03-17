@@ -12,6 +12,7 @@ const STATUS = {
 }
 
 export default function ClientDetailPage() {
+  // :id in the URL is client_profiles.id (set by the roster)
   const { id } = useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
@@ -23,7 +24,9 @@ export default function ClientDetailPage() {
 
   const { data: workouts, isLoading: loadingWorkouts } = useQuery({
     queryKey: ['client-workouts', id],
+    // id is client_profiles.id — matches workouts.client_id directly
     queryFn: () => coachApi.getClientWorkouts(id).then(r => r.data.data),
+    enabled: !!id,
   })
 
   const { mutate: deleteWorkout } = useMutation({
@@ -32,6 +35,7 @@ export default function ClientDetailPage() {
   })
 
   if (loadingClient) return <div className="p-6 text-center text-gray-400">Loading…</div>
+  if (!client) return <div className="p-6 text-center text-gray-400">Client not found</div>
 
   const completedCount = workouts?.filter(w => w.status === 'COMPLETED').length ?? 0
   const totalCount = workouts?.length ?? 0
@@ -45,14 +49,14 @@ export default function ClientDetailPage() {
       {/* Client header */}
       <div className="card p-5 mb-5 flex items-center gap-4">
         <div className="w-14 h-14 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-bold text-lg shrink-0">
-          {getInitials(client?.first_name, client?.last_name)}
+          {getInitials(client.first_name, client.last_name)}
         </div>
         <div className="flex-1 min-w-0">
           <h1 className="text-lg font-bold text-gray-900">
-            {client?.first_name} {client?.last_name}
+            {client.first_name} {client.last_name}
           </h1>
-          <p className="text-sm text-gray-400 truncate">{client?.email}</p>
-          {client?.goals && (
+          <p className="text-sm text-gray-400 truncate">{client.email}</p>
+          {client.goals && (
             <p className="text-xs text-gray-500 mt-1 line-clamp-2">🎯 {client.goals}</p>
           )}
         </div>
@@ -61,9 +65,9 @@ export default function ClientDetailPage() {
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3 mb-5">
         {[
-          { label: 'Total', value: totalCount },
+          { label: 'Total',     value: totalCount },
           { label: 'Completed', value: completedCount },
-          { label: 'Rate', value: totalCount ? `${Math.round((completedCount / totalCount) * 100)}%` : '—' },
+          { label: 'Rate',      value: totalCount ? `${Math.round((completedCount / totalCount) * 100)}%` : '—' },
         ].map(({ label, value }) => (
           <div key={label} className="card p-3 text-center">
             <p className="text-xl font-bold text-gray-900">{value}</p>
@@ -75,6 +79,7 @@ export default function ClientDetailPage() {
       {/* Workouts header */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="section-title">Assigned Workouts</h2>
+        {/* Pass client_profiles.id (id) to the assign page */}
         <button
           onClick={() => navigate(`/coach/clients/${id}/assign`)}
           className="btn-primary gap-1.5 text-sm py-2"

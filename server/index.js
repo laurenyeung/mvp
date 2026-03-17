@@ -29,17 +29,16 @@ const app  = express()
 const PORT = process.env.PORT || 4000
 const IS_PROD = process.env.NODE_ENV === 'production'
 
-// ─── Security headers (helmet) ────────────────────────────────────────────────
+// ─── Security headers ─────────────────────────────────────────────────────────
 app.use(helmet())
 
-// ─── CORS — tighten in production ────────────────────────────────────────────
+// ─── CORS ─────────────────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = IS_PROD
   ? (process.env.ALLOWED_ORIGINS ?? '').split(',').map(o => o.trim()).filter(Boolean)
   : ['http://localhost:3000']
 
 app.use(cors({
   origin: (origin, cb) => {
-    // Allow requests with no origin (e.g. mobile apps, curl in dev)
     if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true)
     cb(new Error(`CORS: origin ${origin} not allowed`))
   },
@@ -48,14 +47,17 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }))
 
-// ─── Body parsing — limit size to prevent payload attacks ────────────────────
+// ─── Body parsing ─────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '64kb' }))
 app.use(express.urlencoded({ extended: false, limit: '64kb' }))
 
-// ─── Global rate limiter (200 req/min per IP) ─────────────────────────────────
-app.use('/api/', apiLimiter)
+// ─── Rate limiting ────────────────────────────────────────────────────────────
+// Skip rate limiting in test environment
+if (process.env.NODE_ENV !== 'test') {
+  app.use('/api/', apiLimiter)
+}
 
-// ─── Health check (no auth, no rate limit overhead) ──────────────────────────
+// ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -72,24 +74,26 @@ app.use((_req, res) => {
 })
 
 // ─── Global error handler ─────────────────────────────────────────────────────
-// Never expose stack traces or internal error details in production
 app.use((err, _req, res, _next) => {
   const status  = err.status  || 500
   const code    = err.code    || 'INTERNAL_ERROR'
 
   if (!IS_PROD) {
-    // Full detail in development
     console.error(err)
     return res.status(status).json({ error: { code, message: err.message, stack: err.stack } })
   }
 
-  // Production: log internally, return safe message to client
   console.error(`[${new Date().toISOString()}] ${code}: ${err.message}`)
   const message = status < 500 ? err.message : 'Something went wrong'
   res.status(status).json({ error: { code, message } })
 })
 
-app.listen(PORT, () => {
-  console.log(`🚀  Server running on http://localhost:${PORT}`)
-  console.log(`    Environment: ${process.env.NODE_ENV ?? 'development'}`)
-})
+// ─── Only bind port when run directly, not when imported by tests ─────────────
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`🚀  Server running on http://localhost:${PORT}`)
+    console.log(`    Environment: ${process.env.NODE_ENV ?? 'development'}`)
+  })
+}
+
+export default app
