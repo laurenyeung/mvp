@@ -1,27 +1,33 @@
 import { z } from 'zod'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-// Safe string: trims whitespace, rejects null bytes and control characters
+// Safe string: trims, enforces max length, rejects control characters.
 const safeStr = (max = 255) =>
   z.string().trim()
     .max(max, `Must be ${max} characters or fewer`)
     .refine(s => !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(s), 'Invalid characters')
 
-// UUID v4 validator
+// Required non-empty safe string — min(1) must come BEFORE refine() because
+// ZodEffects (returned by refine) does not expose .min()
+const requiredStr = (max = 255) =>
+  z.string().trim()
+    .min(1, 'This field is required')
+    .max(max, `Must be ${max} characters or fewer`)
+    .refine(s => !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(s), 'Invalid characters')
+
 export const uuidSchema = z.string().uuid('Invalid ID format')
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export const registerSchema = z.object({
   email:      z.string().trim().toLowerCase().email('Invalid email').max(255),
-  // Min 8 chars, at least one letter and one number
   password:   z.string()
     .min(8,  'Password must be at least 8 characters')
-    .max(72, 'Password too long') // bcrypt truncates at 72 bytes
+    .max(72, 'Password too long')
     .regex(/[a-zA-Z]/, 'Password must contain at least one letter')
     .regex(/[0-9]/,    'Password must contain at least one number'),
   role:       z.enum(['COACH', 'CLIENT']),
-  first_name: safeStr(100),
-  last_name:  safeStr(100),
+  first_name: requiredStr(100),
+  last_name:  requiredStr(100),
 })
 
 export const loginSchema = z.object({
@@ -31,9 +37,9 @@ export const loginSchema = z.object({
 
 // ─── Exercises ────────────────────────────────────────────────────────────────
 export const createExerciseSchema = z.object({
-  name:                    safeStr(200),
+  name:                    requiredStr(200),
   description:             safeStr(2000).optional(),
-  primary_muscle_group:    safeStr(100),
+  primary_muscle_group:    requiredStr(100),
   secondary_muscle_groups: z.array(safeStr(100)).max(10).optional(),
   equipment_required:      z.array(safeStr(100)).max(20).optional(),
   is_public:               z.boolean().optional().default(false),
@@ -49,14 +55,14 @@ const prescribedExerciseSchema = z.object({
   prescribed_reps:      safeStr(50).optional(),
   prescribed_weight:    safeStr(50).optional(),
   prescribed_tempo:     safeStr(20).optional(),
-  prescribed_rest_secs: z.number().int().min(0).max(600).optional(),
-  notes:                safeStr(500).optional(),
+  prescribed_rest_secs: z.number().int().min(0).max(600).nullable().optional(),
+  notes:                safeStr(500).nullable().optional(),
 })
 
 export const createTemplateSchema = z.object({
-  name:                       safeStr(200),
+  name:                       requiredStr(200),   // empty string must be rejected
   description:                safeStr(2000).optional(),
-  estimated_duration_minutes: z.number().int().min(1).max(300).optional(),
+  estimated_duration_minutes: z.number().int().min(1).max(300).nullable().optional(),
   exercises:                  z.array(prescribedExerciseSchema).max(50).optional().default([]),
 })
 
@@ -82,10 +88,16 @@ export const updateWorkoutSchema = z.object({
 const exerciseLogSchema = z.object({
   workout_exercise_id: uuidSchema,
   actual_sets:         z.number().int().min(0).max(100).nullable().optional(),
-  actual_reps:         safeStr(100).nullable().optional(),   // e.g. "10,10,8"
-  actual_weight:       safeStr(100).nullable().optional(),   // e.g. "60,65,65"
+  actual_reps:         safeStr(100).nullable().optional(),
+  actual_weight:       safeStr(100).nullable().optional(),
   rpe:                 z.number().min(1).max(10).nullable().optional(),
   notes:               safeStr(500).nullable().optional(),
+  sets: z.array(z.object({
+    set_index: z.number().int().min(0).max(99),
+    reps:      z.number().int().min(0).max(9999).nullable().optional(),
+    weight:    z.number().min(0).max(9999).nullable().optional(),
+    rpe:       z.number().min(1).max(10).nullable().optional(),
+  })).max(30).optional().default([]),
 })
 
 export const workoutLogSchema = z.object({
@@ -94,12 +106,17 @@ export const workoutLogSchema = z.object({
   exercise_logs:  z.array(exerciseLogSchema).max(50).optional().default([]),
 })
 
+// ─── Comments ─────────────────────────────────────────────────────────────────
+export const commentSchema = z.object({
+  content: requiredStr(2000),
+})
+
 // ─── Exercise media upload registration ───────────────────────────────────────
 export const exerciseMediaSchema = z.object({
   s3_key:        safeStr(500),
   thumbnail_key: safeStr(500).optional(),
   mime_type:     z.string().regex(/^(video|image)\/.+$/, 'Must be a video or image MIME type').max(100),
-  file_size_kb:  z.number().int().min(1).max(200_000).optional(), // max 200 MB
+  file_size_kb:  z.number().int().min(1).max(200_000).optional(),
 })
 
 // ─── Progress metrics ─────────────────────────────────────────────────────────
@@ -107,28 +124,24 @@ export const progressSchema = z.object({
   metric_type:  z.enum(['WEIGHT', 'BODY_FAT', 'WAIST', 'CUSTOM']),
   metric_label: safeStr(100).optional(),
   value:        z.number().min(0).max(9999),
-  unit:         safeStr(20),
+  unit:         requiredStr(20),
   recorded_at:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD'),
 })
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
 export const sendMessageSchema = z.object({
   thread_id: uuidSchema,
-  content:   safeStr(4000).refine(s => s.trim().length > 0, 'Message cannot be empty'),
+  content:   requiredStr(4000),
 })
 
 // ─── Media presign ────────────────────────────────────────────────────────────
-// Allowed MIME types for upload
 const ALLOWED_MIME_TYPES = [
   'video/mp4', 'video/quicktime', 'video/webm',
   'image/jpeg', 'image/png', 'image/webp', 'image/gif',
 ]
 
-// Safe filename: no path separators or null bytes
 const safeFileName = z.string()
-  .trim()
-  .min(1)
-  .max(200)
+  .trim().min(1).max(200)
   .regex(/^[^/\\<>:"|?*\x00-\x1f]+$/, 'Invalid filename')
 
 export const presignSchema = z.object({

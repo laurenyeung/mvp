@@ -7,6 +7,7 @@ import {
   assignWorkoutSchema,
   updateWorkoutSchema,
   uuidSchema,
+  commentSchema,
 } from '../middleware/validate.js'
 import { z } from 'zod'
 
@@ -170,56 +171,103 @@ router.delete('/templates/:id', async (req, res, next) => {
 //  CLIENTS
 // ════════════════════════════════════════════════════════
 
+// GET /coach/clients/search — NOTE: must be before /clients/:id
+router.get('/clients/search', async (req, res, next) => {
+  try {
+    await getCoachProfileId(req.user.id)
+    const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : ''
+    if (q.length < 2) return res.json({ data: [] })
+
+    const { rows } = await query(
+      `SELECT u.id, u.email, u.first_name, u.last_name
+       FROM users u
+       WHERE u.role = 'CLIENT'
+         AND u.is_active = true
+         AND (
+           u.email      ILIKE $1
+           OR u.first_name ILIKE $1
+           OR u.last_name  ILIKE $1
+           OR (u.first_name || ' ' || u.last_name) ILIKE $1
+         )
+         AND u.id NOT IN (SELECT cp.user_id FROM client_profiles cp)
+       ORDER BY u.first_name, u.last_name
+       LIMIT 10`,
+      [`%${q}%`]
+    )
+    res.json({ data: rows })
+  } catch (err) { next(err) }
+})
+
+// POST /coach/clients
+router.post('/clients', async (req, res, next) => {
+  try {
+    const parsed = z.object({ user_id: uuidSchema }).safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'user_id must be a valid UUID' } })
+    }
+    const coachId = await getCoachProfileId(req.user.id)
+    const { user_id } = parsed.data
+
+    const { rows: userRows } = await query(
+      `SELECT id FROM users WHERE id=$1 AND role='CLIENT' AND is_active=true`, [user_id]
+    )
+    if (!userRows.length) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Client user not found' } })
+    }
+
+    const { rows: existing } = await query(
+      `SELECT id FROM client_profiles WHERE user_id=$1 AND coach_id=$2`, [user_id, coachId]
+    )
+    if (existing.length) {
+      return res.status(409).json({ error: { code: 'CONFLICT', message: 'Client is already linked to your account' } })
+    }
+
+    const { rows: inserted } = await query(
+      `INSERT INTO client_profiles (user_id, coach_id) VALUES ($1,$2) RETURNING id`,
+      [user_id, coachId]
+    )
+
+    const { rows: full } = await query(
+      `SELECT cp.id, u.id AS user_id, u.email, u.first_name, u.last_name,
+              u.profile_image_url, cp.goals, cp.notes
+       FROM client_profiles cp JOIN users u ON u.id = cp.user_id
+       WHERE cp.id=$1`,
+      [inserted[0].id]
+    )
+    res.status(201).json({ data: full[0] })
+  } catch (err) { next(err) }
+})
+
 // GET /coach/clients
-// Returns client_profiles.id as the row id so all downstream coach routes
-// (assign workout, get workouts) use the correct FK without extra lookups.
 router.get('/clients', async (req, res, next) => {
   try {
     const coachId = await getCoachProfileId(req.user.id)
     const { rows } = await query(
-      `SELECT
-         cp.id,
-         u.id   AS user_id,
-         u.email,
-         u.first_name,
-         u.last_name,
-         u.profile_image_url,
-         cp.goals,
-         cp.notes,
-         COUNT(w.id) FILTER (WHERE w.status='SCHEDULED') AS upcoming_workouts
+      `SELECT cp.id, u.id AS user_id, u.email, u.first_name, u.last_name,
+              u.profile_image_url, cp.goals, cp.notes,
+              COUNT(w.id) FILTER (WHERE w.status='SCHEDULED') AS upcoming_workouts
        FROM client_profiles cp
        JOIN users u ON u.id = cp.user_id
        LEFT JOIN workouts w ON w.client_id = cp.id
        WHERE cp.coach_id=$1
-       GROUP BY cp.id, u.id
-       ORDER BY u.first_name`,
+       GROUP BY cp.id, u.id ORDER BY u.first_name`,
       [coachId]
     )
     res.json({ data: rows })
   } catch (err) { next(err) }
 })
 
-// GET /coach/clients/:id  — :id is client_profiles.id
+// GET /coach/clients/:id
 router.get('/clients/:id', async (req, res, next) => {
   try {
     const idParsed = uuidSchema.safeParse(req.params.id)
     if (!idParsed.success) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Client not found' } })
     const coachId = await getCoachProfileId(req.user.id)
     const { rows } = await query(
-      `SELECT
-         cp.id,
-         u.id   AS user_id,
-         u.email,
-         u.first_name,
-         u.last_name,
-         u.profile_image_url,
-         cp.goals,
-         cp.notes,
-         cp.date_of_birth,
-         cp.height_cm,
-         cp.weight_kg
-       FROM client_profiles cp
-       JOIN users u ON u.id = cp.user_id
+      `SELECT cp.id, u.id AS user_id, u.email, u.first_name, u.last_name,
+              u.profile_image_url, cp.goals, cp.notes,
+              cp.date_of_birth, cp.height_cm, cp.weight_kg
+       FROM client_profiles cp JOIN users u ON u.id = cp.user_id
        WHERE cp.id=$1 AND cp.coach_id=$2`,
       [idParsed.data, coachId]
     )
@@ -228,7 +276,7 @@ router.get('/clients/:id', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
-// GET /coach/clients/:clientId/workouts  — :clientId is client_profiles.id
+// GET /coach/clients/:clientId/workouts
 router.get('/clients/:clientId/workouts', async (req, res, next) => {
   try {
     const idParsed = uuidSchema.safeParse(req.params.clientId)
@@ -242,7 +290,6 @@ router.get('/clients/:clientId/workouts', async (req, res, next) => {
     const to   = dateRe.test(req.query.to   ?? '') ? req.query.to   : null
 
     const params = [idParsed.data, coachId]
-    // workouts.client_id is client_profiles.id — matches the :clientId param directly
     let where = 'w.client_id=$1 AND w.coach_id=$2'
     if (status) { params.push(status); where += ` AND w.status=$${params.length}` }
     if (from)   { params.push(from);   where += ` AND w.scheduled_date>=$${params.length}` }
@@ -251,6 +298,73 @@ router.get('/clients/:clientId/workouts', async (req, res, next) => {
     const { rows } = await query(
       `SELECT w.* FROM workouts w WHERE ${where} ORDER BY w.scheduled_date DESC`,
       params
+    )
+    res.json({ data: rows })
+  } catch (err) { next(err) }
+})
+
+// ════════════════════════════════════════════════════════
+//  WORKOUT COMMENTS (coach side)
+// ════════════════════════════════════════════════════════
+
+// POST /coach/workouts/:id/comments
+router.post('/workouts/:id/comments', async (req, res, next) => {
+  try {
+    const idParsed = uuidSchema.safeParse(req.params.id)
+    if (!idParsed.success) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Workout not found' } })
+
+    const parsed = commentSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0].message } })
+    }
+
+    const coachId = await getCoachProfileId(req.user.id)
+    // Verify this workout belongs to this coach
+    const { rows: wRows } = await query(
+      `SELECT w.id, cp_client.user_id AS client_user_id
+       FROM workouts w JOIN client_profiles cp_client ON cp_client.id = w.client_id
+       WHERE w.id=$1 AND w.coach_id=$2`,
+      [idParsed.data, coachId]
+    )
+    if (!wRows.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Workout not found' } })
+
+    const result = await transaction(async (client) => {
+      const { rows } = await client.query(
+        `INSERT INTO workout_comments (workout_id, user_id, content) VALUES ($1,$2,$3) RETURNING *`,
+        [idParsed.data, req.user.id, parsed.data.content]
+      )
+      // Notify client
+      await client.query(
+        `INSERT INTO notifications (user_id, type, related_id) VALUES ($1,'COMMENT_ADDED',$2)`,
+        [wRows[0].client_user_id, rows[0].id]
+      )
+      await client.query(
+        `INSERT INTO activity (user_id, type, related_id) VALUES ($1,'COMMENT_ADDED',$2)`,
+        [req.user.id, rows[0].id]
+      )
+      return rows[0]
+    })
+    res.status(201).json({ data: result })
+  } catch (err) { next(err) }
+})
+
+// GET /coach/workouts/:id/comments
+router.get('/workouts/:id/comments', async (req, res, next) => {
+  try {
+    const idParsed = uuidSchema.safeParse(req.params.id)
+    if (!idParsed.success) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Workout not found' } })
+    const coachId = await getCoachProfileId(req.user.id)
+
+    const { rows: wRows } = await query(
+      `SELECT id FROM workouts WHERE id=$1 AND coach_id=$2`, [idParsed.data, coachId]
+    )
+    if (!wRows.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Workout not found' } })
+
+    const { rows } = await query(
+      `SELECT wc.*, u.first_name, u.last_name, u.role
+       FROM workout_comments wc JOIN users u ON u.id = wc.user_id
+       WHERE wc.workout_id=$1 ORDER BY wc.created_at ASC`,
+      [idParsed.data]
     )
     res.json({ data: rows })
   } catch (err) { next(err) }
@@ -268,7 +382,6 @@ router.post('/workouts/assign', async (req, res, next) => {
     }
     const coachId = await getCoachProfileId(req.user.id)
     const { template_id, client_id, scheduled_date, name } = parsed.data
-    // client_id here is client_profiles.id (consistent with assign form)
 
     const { rows: tmpl } = await query(
       'SELECT * FROM workout_templates WHERE id=$1 AND coach_id=$2', [template_id, coachId]
@@ -280,7 +393,6 @@ router.post('/workouts/assign', async (req, res, next) => {
       [template_id]
     )
 
-    // Resolve the client's user_id for the notification
     const { rows: clientUser } = await query(
       'SELECT user_id FROM client_profiles WHERE id=$1', [client_id]
     )
@@ -308,7 +420,7 @@ router.post('/workouts/assign', async (req, res, next) => {
       }
 
       await client.query(
-        `INSERT INTO notifications (user_id, type, related_id) VALUES ($1, 'WORKOUT_ASSIGNED', $2)`,
+        `INSERT INTO notifications (user_id, type, related_id) VALUES ($1,'WORKOUT_ASSIGNED',$2)`,
         [clientUserId, w.id]
       )
 

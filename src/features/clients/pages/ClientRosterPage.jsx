@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Users, ChevronRight, Search } from 'lucide-react'
+import { Users, ChevronRight, Search, UserPlus } from 'lucide-react'
 import { useState } from 'react'
 import { coachApi } from '@/lib/api'
 import { getInitials } from '@/lib/utils'
+import AddClientModal from '../components/AddClientModal.jsx'
 
 export default function ClientRosterPage() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
+  const [showAdd, setShowAdd] = useState(false)
 
   const { data: clients, isLoading } = useQuery({
     queryKey: ['clients'],
@@ -20,11 +22,18 @@ export default function ClientRosterPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="page-header">My Clients</h1>
-        <span className="text-sm text-gray-400 font-medium">{clients?.length ?? 0} total</span>
+        <button
+          onClick={() => setShowAdd(true)}
+          className="btn-primary gap-2"
+        >
+          <UserPlus size={16} /> Add Client
+        </button>
       </div>
 
+      {/* Search */}
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
@@ -35,6 +44,12 @@ export default function ClientRosterPage() {
         />
       </div>
 
+      {/* Count */}
+      {!isLoading && (
+        <p className="text-xs text-gray-400 mb-3">{clients?.length ?? 0} client{clients?.length !== 1 ? 's' : ''}</p>
+      )}
+
+      {/* List */}
       {isLoading ? (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
@@ -44,7 +59,14 @@ export default function ClientRosterPage() {
       ) : filtered?.length === 0 ? (
         <div className="text-center py-20 text-gray-400">
           <Users size={40} className="mx-auto mb-3 opacity-30" />
-          <p>No clients found</p>
+          <p className="font-medium">
+            {search ? 'No clients match your search' : 'No clients yet'}
+          </p>
+          {!search && (
+            <p className="text-sm mt-1">
+              Click <strong>Add Client</strong> to link a registered client account.
+            </p>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
@@ -75,6 +97,8 @@ export default function ClientRosterPage() {
           ))}
         </div>
       )}
+
+      {showAdd && <AddClientModal onClose={() => setShowAdd(false)} />}
     </div>
   )
 }

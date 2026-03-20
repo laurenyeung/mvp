@@ -9,7 +9,19 @@ DO $$ BEGIN
   CREATE TYPE media_type_enum   AS ENUM ('VIDEO','IMAGE');
   CREATE TYPE media_rel_type    AS ENUM ('EXERCISE_LOG','PROGRESS','MESSAGE');
   CREATE TYPE metric_type_enum  AS ENUM ('WEIGHT','BODY_FAT','WAIST','CUSTOM');
-  CREATE TYPE notif_type        AS ENUM ('WORKOUT_ASSIGNED','WORKOUT_REMINDER','WORKOUT_COMPLETED','NEW_MESSAGE','VIDEO_UPLOADED');
+  CREATE TYPE notif_type        AS ENUM ('WORKOUT_ASSIGNED','WORKOUT_REMINDER','WORKOUT_COMPLETED','NEW_MESSAGE','VIDEO_UPLOADED','COMMENT_ADDED');
+  CREATE TYPE activity_type     AS ENUM ('WORKOUT_COMPLETED','COMMENT_ADDED','VIDEO_UPLOADED','WORKOUT_ASSIGNED');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Safely add new enum values if they don't exist yet
+DO $$ BEGIN
+  ALTER TYPE notif_type ADD VALUE IF NOT EXISTS 'COMMENT_ADDED';
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE activity_type AS ENUM ('WORKOUT_COMPLETED','COMMENT_ADDED','VIDEO_UPLOADED','WORKOUT_ASSIGNED');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -167,6 +179,48 @@ CREATE TABLE IF NOT EXISTS exercise_logs (
   notes               TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_exercise_logs_log ON exercise_logs(workout_log_id);
+
+-- EXERCISE SET LOGS (V2) — per-set breakdown
+CREATE TABLE IF NOT EXISTS exercise_set_logs (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  exercise_log_id UUID NOT NULL REFERENCES exercise_logs(id) ON DELETE CASCADE,
+  set_index       SMALLINT NOT NULL,
+  reps            SMALLINT,
+  weight          NUMERIC(7,2),
+  rpe             NUMERIC(3,1),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_set_logs_exercise ON exercise_set_logs(exercise_log_id);
+
+-- WORKOUT COMMENTS (V2)
+CREATE TABLE IF NOT EXISTS workout_comments (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workout_id UUID NOT NULL REFERENCES workouts(id) ON DELETE CASCADE,
+  user_id    UUID NOT NULL REFERENCES users(id),
+  content    TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_workout_comments_workout ON workout_comments(workout_id, created_at);
+
+-- EXERCISE COMMENTS (V2)
+CREATE TABLE IF NOT EXISTS exercise_comments (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  exercise_log_id UUID NOT NULL REFERENCES exercise_logs(id) ON DELETE CASCADE,
+  user_id         UUID NOT NULL REFERENCES users(id),
+  content         TEXT NOT NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_exercise_comments_log ON exercise_comments(exercise_log_id, created_at);
+
+-- ACTIVITY FEED (V2)
+CREATE TABLE IF NOT EXISTS activity (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NOT NULL REFERENCES users(id),
+  type       activity_type NOT NULL,
+  related_id UUID,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_activity_user ON activity(user_id, created_at DESC);
 
 -- PROGRESS METRICS
 CREATE TABLE IF NOT EXISTS progress_metrics (
