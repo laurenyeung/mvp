@@ -60,7 +60,7 @@ router.get('/templates/:id', async (req, res, next) => {
            json_agg(
              json_build_object(
                'id', wte.id, 'exercise_id', wte.exercise_id, 'name', e.name,
-               'primary_muscle_group', e.primary_muscle_group, 'order_index', wte.order_index,
+               'order_index', wte.order_index,
                'prescribed_sets', wte.prescribed_sets, 'prescribed_reps', wte.prescribed_reps,
                'prescribed_weight', wte.prescribed_weight, 'prescribed_tempo', wte.prescribed_tempo,
                'prescribed_rest_secs', wte.prescribed_rest_secs, 'notes', wte.notes
@@ -70,7 +70,7 @@ router.get('/templates/:id', async (req, res, next) => {
        FROM workout_templates wt
        LEFT JOIN workout_template_exercises wte ON wte.workout_template_id = wt.id
        LEFT JOIN exercises e ON e.id = wte.exercise_id
-       WHERE wt.id=$1 AND wt.coach_id=$2 GROUP BY wt.id`,
+       WHERE wt.id=$1 AND wt.coach_id=$2 AND wt.is_archived=false GROUP BY wt.id`,
       [idParsed.data, coachId]
     )
     if (!rows.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Template not found' } })
@@ -85,13 +85,22 @@ router.post('/templates', async (req, res, next) => {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0].message } })
     }
     const coachId = await getCoachProfileId(req.user.id)
-    const { name, description, estimated_duration_minutes, exercises } = parsed.data
+    const { name, description, exercises } = parsed.data
+
+    // Duplicate name check — scoped to this coach's non-archived templates
+    const { rows: existing } = await query(
+      `SELECT id FROM workout_templates WHERE coach_id=$1 AND name=$2 AND is_archived=false`,
+      [coachId, name.trim()]
+    )
+    if (existing.length) {
+      return res.status(409).json({ error: { code: 'CONFLICT', message: 'A template with that name already exists' } })
+    }
 
     const result = await transaction(async (client) => {
       const { rows } = await client.query(
-        `INSERT INTO workout_templates (coach_id, name, description, estimated_duration_minutes)
-         VALUES ($1,$2,$3,$4) RETURNING *`,
-        [coachId, name, description ?? null, estimated_duration_minutes ?? null]
+        `INSERT INTO workout_templates (coach_id, name, description)
+         VALUES ($1,$2,$3) RETURNING *`,
+        [coachId, name, description ?? null]
       )
       const template = rows[0]
       for (const [i, ex] of exercises.entries()) {
@@ -101,7 +110,7 @@ router.post('/templates', async (req, res, next) => {
               prescribed_reps, prescribed_weight, prescribed_tempo, prescribed_rest_secs, notes)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
           [template.id, ex.exercise_id, ex.order_index ?? i,
-           ex.prescribed_sets ?? 3, ex.prescribed_reps ?? null,
+           ex.prescribed_sets ?? null, ex.prescribed_reps ?? null,
            ex.prescribed_weight ?? null, ex.prescribed_tempo ?? null,
            ex.prescribed_rest_secs ?? null, ex.notes ?? null]
         )
@@ -122,18 +131,28 @@ router.put('/templates/:id', async (req, res, next) => {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0].message } })
     }
     const coachId = await getCoachProfileId(req.user.id)
-    const { name, description, estimated_duration_minutes, exercises } = parsed.data
+    const { name, description, exercises } = parsed.data
 
     const result = await transaction(async (client) => {
       const { rows } = await client.query(
         `UPDATE workout_templates
-         SET name=COALESCE($1,name), description=COALESCE($2,description),
-             estimated_duration_minutes=COALESCE($3,estimated_duration_minutes), updated_at=NOW()
-         WHERE id=$4 AND coach_id=$5 RETURNING *`,
-        [name ?? null, description ?? null, estimated_duration_minutes ?? null, idParsed.data, coachId]
+         SET name=COALESCE($1,name), description=COALESCE($2,description), updated_at=NOW()
+         WHERE id=$3 AND coach_id=$4 RETURNING *`,
+        [name ?? null, description ?? null, idParsed.data, coachId]
       )
       if (!rows.length) throw Object.assign(new Error('Template not found'), { status: 404, code: 'NOT_FOUND' })
       if (exercises !== undefined) {
+        // Validate all exercise_ids exist before mutating — prevents FK 500 and gives a clean 400
+        if (exercises.length > 0) {
+          const exerciseIds = exercises.map(ex => ex.exercise_id)
+          const { rows: validExs } = await client.query(
+            'SELECT id FROM exercises WHERE id = ANY($1::uuid[])',
+            [exerciseIds]
+          )
+          if (validExs.length !== exerciseIds.length) {
+            throw Object.assign(new Error('One or more exercise_ids are invalid'), { status: 400, code: 'VALIDATION_ERROR' })
+          }
+        }
         await client.query('DELETE FROM workout_template_exercises WHERE workout_template_id=$1', [idParsed.data])
         for (const [i, ex] of exercises.entries()) {
           await client.query(
@@ -142,7 +161,7 @@ router.put('/templates/:id', async (req, res, next) => {
                 prescribed_reps, prescribed_weight, prescribed_tempo, prescribed_rest_secs, notes)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
             [idParsed.data, ex.exercise_id, ex.order_index ?? i,
-             ex.prescribed_sets ?? 3, ex.prescribed_reps ?? null,
+             ex.prescribed_sets ?? null, ex.prescribed_reps ?? null,
              ex.prescribed_weight ?? null, ex.prescribed_tempo ?? null,
              ex.prescribed_rest_secs ?? null, ex.notes ?? null]
           )
@@ -215,11 +234,12 @@ router.post('/clients', async (req, res, next) => {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Client user not found' } })
     }
 
-    const { rows: existing } = await query(
-      `SELECT id FROM client_profiles WHERE user_id=$1 AND coach_id=$2`, [user_id, coachId]
+    // Check if user is already linked to ANY coach (unique constraint on user_id)
+    const { rows: anyProfile } = await query(
+      `SELECT id, coach_id FROM client_profiles WHERE user_id=$1`, [user_id]
     )
-    if (existing.length) {
-      return res.status(409).json({ error: { code: 'CONFLICT', message: 'Client is already linked to your account' } })
+    if (anyProfile.length) {
+      return res.status(409).json({ error: { code: 'CONFLICT', message: 'Client is already linked to a coach' } })
     }
 
     const { rows: inserted } = await query(
@@ -384,7 +404,7 @@ router.post('/workouts/assign', async (req, res, next) => {
     const { template_id, client_id, scheduled_date, name } = parsed.data
 
     const { rows: tmpl } = await query(
-      'SELECT * FROM workout_templates WHERE id=$1 AND coach_id=$2', [template_id, coachId]
+      'SELECT * FROM workout_templates WHERE id=$1 AND coach_id=$2 AND is_archived=false', [template_id, coachId]
     )
     if (!tmpl.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Template not found' } })
 

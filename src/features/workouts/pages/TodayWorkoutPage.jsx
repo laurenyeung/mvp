@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Calendar, CheckCircle2, Clock, ChevronRight, Dumbbell } from 'lucide-react'
+import { Calendar, CheckCircle2, ChevronRight, Dumbbell } from 'lucide-react'
 import { clientApi } from '@/lib/api'
 import { useAuthStore } from '@/features/auth/store/authStore'
 
@@ -10,7 +10,13 @@ export default function TodayWorkoutPage() {
 
   const { data: workout, isLoading } = useQuery({
     queryKey: ['today-workout'],
-    queryFn: () => clientApi.todayWorkout().then(r => r.data.data),
+    // API returns an array; show the first SCHEDULED workout, or the first COMPLETED one
+    queryFn: () => clientApi.todayWorkout().then(r => {
+      const workouts = r.data.data
+      return workouts.find(w => w.status === 'SCHEDULED')
+          ?? workouts.find(w => w.status === 'COMPLETED')
+          ?? null
+    }),
   })
 
   if (isLoading) return (
@@ -50,11 +56,6 @@ export default function TodayWorkoutPage() {
             <div className="flex items-start justify-between mb-3">
               <div>
                 <p className="font-bold text-gray-900 text-lg leading-tight">{workout.name}</p>
-                {workout.estimated_duration_minutes && (
-                  <span className="flex items-center gap-1 text-xs text-gray-400 mt-1">
-                    <Clock size={12} /> {workout.estimated_duration_minutes} min
-                  </span>
-                )}
               </div>
               <span className="bg-brand-50 text-brand-700 text-xs font-semibold px-2.5 py-1 rounded-full">
                 Scheduled

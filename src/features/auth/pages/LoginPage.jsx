@@ -2,7 +2,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Zap } from 'lucide-react'
 import { loginSchema } from '@/lib/validationSchemas'
 import { authApi } from '@/lib/api'
 import { useAuthStore } from '../store/authStore'
@@ -33,29 +32,33 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-50 to-white flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-pixel-bg">
       <div className="w-full max-w-sm">
+
         {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-brand-600 flex items-center justify-center mb-3 shadow-lg">
-            <Zap size={28} className="text-white" />
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-pixel-accent mb-4">
+            <span className="text-lg font-black text-gray-900">LI</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">FitTrack</h1>
-          <p className="text-gray-500 text-sm mt-1">Sign in to your account</p>
+          <h1 className="text-2xl font-black text-gray-900">LockedIn</h1>
+          <p className="mt-1 text-sm text-gray-500">Sign in to your account</p>
         </div>
 
-        <div className="card p-6">
+        {/* Form */}
+        <div className="bg-white rounded-xl shadow-card border border-pixel-border p-6">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
               <label className="label">Email</label>
               <input
                 {...register('email')}
                 type="email"
-                placeholder="you@example.com"
+                placeholder="trainer@example.com"
                 className="input"
                 autoComplete="email"
               />
-              {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
+              {errors.email && (
+                <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>
+              )}
             </div>
 
             <div>
@@ -67,29 +70,27 @@ export default function LoginPage() {
                 className="input"
                 autoComplete="current-password"
               />
-              {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
+              {errors.password && (
+                <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>
+              )}
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
+              <div className="rounded bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
                 {error}
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full mt-2"
-            >
+            <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
               {loading ? 'Signing in…' : 'Sign In'}
             </button>
           </form>
         </div>
 
-        <p className="text-center text-sm text-gray-500 mt-4">
+        <p className="text-center mt-5 text-sm text-gray-500">
           Don't have an account?{' '}
-          <Link to="/register" className="text-brand-600 font-medium hover:underline">
-            Sign up
+          <Link to="/register" className="font-semibold text-pixel-dim hover:underline">
+            Create one
           </Link>
         </p>
       </div>

@@ -8,6 +8,7 @@ export default function WorkoutBuilderPage() {
   const qc = useQueryClient()
   const [showCreate, setShowCreate] = useState(false)
   const [editTemplate, setEditTemplate] = useState(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
 
   const { data: templates, isLoading } = useQuery({
     queryKey: ['templates'],
@@ -18,6 +19,11 @@ export default function WorkoutBuilderPage() {
     mutationFn: (id) => coachApi.deleteTemplate(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['templates'] }),
   })
+
+  const confirmDelete = (id) => {
+    deleteTemplate(id)
+    setConfirmDeleteId(null)
+  }
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
@@ -68,7 +74,7 @@ export default function WorkoutBuilderPage() {
                   <ChevronRight size={18} />
                 </button>
                 <button
-                  onClick={() => deleteTemplate(t.id)}
+                  onClick={() => setConfirmDeleteId(t.id)}
                   className="btn-ghost p-2 text-gray-400 hover:text-red-500"
                 >
                   <Trash2 size={16} />
@@ -84,6 +90,29 @@ export default function WorkoutBuilderPage() {
           template={editTemplate}
           onClose={() => { setShowCreate(false); setEditTemplate(null) }}
         />
+      )}
+
+      {confirmDeleteId && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-xl shadow-card border border-pixel-border p-6 max-w-sm w-full">
+            <h3 className="font-bold text-gray-900 text-lg mb-1">Delete template?</h3>
+            <p className="text-sm text-gray-500 mb-5">This cannot be undone. Any workouts already assigned from this template will not be affected.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="btn-ghost flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => confirmDelete(confirmDeleteId)}
+                className="flex-1 btn bg-red-500 text-white hover:bg-red-600 active:scale-95"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

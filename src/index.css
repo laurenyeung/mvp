@@ -5,46 +5,82 @@
 @layer base {
   * {
     -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
   }
 
   html {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 16px;
     -webkit-font-smoothing: antialiased;
   }
 
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-pixel-bg text-pixel-text;
     overscroll-behavior: none;
   }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #F0F0F0; }
+  ::-webkit-scrollbar-thumb { background: #D0D0D0; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #737373; }
 }
 
 @layer components {
+  /* ── Buttons ── */
   .btn {
-    @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center px-4 py-2.5 rounded
+           font-semibold text-sm transition-all duration-150
+           disabled:opacity-40 disabled:pointer-events-none select-none;
   }
+
   .btn-primary {
-    @apply btn bg-brand-600 text-white hover:bg-brand-700 shadow-sm;
+    @apply btn bg-pixel-accent text-gray-900 hover:bg-orange-600 active:scale-95;
   }
+  /* orange-600 override since Tailwind orange-600 ≠ our accent — use inline bg instead */
+  .btn-primary:hover:not(:disabled) {
+    background-color: #E85700;
+  }
+
   .btn-secondary {
-    @apply btn bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 shadow-sm;
+    @apply btn bg-white text-gray-900 border border-pixel-line hover:border-pixel-accent hover:text-pixel-dim active:scale-95;
   }
+
   .btn-ghost {
-    @apply btn text-gray-600 hover:bg-gray-100;
+    @apply btn text-gray-500 hover:text-gray-900 hover:bg-gray-100 active:scale-95;
   }
+
+  /* ── Card ── */
   .card {
-    @apply bg-white rounded-2xl shadow-sm border border-gray-100;
+    @apply bg-pixel-surface border border-pixel-border rounded shadow-card;
   }
+
+  /* ── Input ── */
   .input {
-    @apply w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm placeholder-gray-400
-           focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition;
+    @apply w-full border border-pixel-line rounded bg-white px-3.5 py-2.5
+           text-sm text-gray-900 placeholder-gray-400
+           focus:outline-none focus:border-pixel-accent focus:ring-2 focus:ring-orange-100
+           transition-colors;
   }
+
+  select.input {
+    @apply appearance-none cursor-pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23737373' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 38px;
+  }
+
+  /* ── Labels ── */
   .label {
-    @apply block text-sm font-medium text-gray-700 mb-1.5;
+    @apply block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide;
   }
+
+  /* ── Typography ── */
   .page-header {
     @apply text-xl font-bold text-gray-900;
   }
+
   .section-title {
-    @apply text-base font-semibold text-gray-800;
+    @apply text-sm font-semibold text-gray-700 uppercase tracking-wide;
   }
 }

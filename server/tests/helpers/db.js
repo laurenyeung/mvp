@@ -22,6 +22,7 @@ export async function cleanDatabase() {
   await testPool.query('DELETE FROM workout_template_exercises')
   await testPool.query('DELETE FROM workout_templates')
   await testPool.query('DELETE FROM exercise_media')
+await testPool.query(`DELETE FROM exercises WHERE created_by IN (SELECT id FROM users WHERE email LIKE '%_test@example.com')`)
   await testPool.query(`DELETE FROM exercises WHERE name LIKE '%_TEST_%'`)
   await testPool.query('DELETE FROM progress_metrics')
   await testPool.query(`

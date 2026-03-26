@@ -69,19 +69,21 @@ CREATE INDEX        IF NOT EXISTS idx_client_profiles_coach ON client_profiles(c
 
 -- EXERCISES
 CREATE TABLE IF NOT EXISTS exercises (
-  id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name                    VARCHAR(200) NOT NULL,
-  description             TEXT,
-  primary_muscle_group    VARCHAR(100),
-  secondary_muscle_groups TEXT[],
-  equipment_required      TEXT[],
-  created_by              UUID NOT NULL REFERENCES users(id),
-  is_public               BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name               VARCHAR(200) NOT NULL,
+  description        TEXT,
+  equipment_required TEXT[],
+  created_by         UUID NOT NULL REFERENCES users(id),
+  is_public          BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_exercises_created_by ON exercises(created_by);
 CREATE INDEX IF NOT EXISTS idx_exercises_public     ON exercises(is_public) WHERE is_public = TRUE;
-CREATE INDEX IF NOT EXISTS idx_exercises_muscle     ON exercises(primary_muscle_group);
+
+-- Drop muscle group columns if they exist (idempotent migration)
+ALTER TABLE exercises DROP COLUMN IF EXISTS primary_muscle_group;
+ALTER TABLE exercises DROP COLUMN IF EXISTS secondary_muscle_groups;
+DROP INDEX IF EXISTS idx_exercises_muscle;
 
 -- EXERCISE MEDIA
 CREATE TABLE IF NOT EXISTS exercise_media (
@@ -101,12 +103,12 @@ CREATE TABLE IF NOT EXISTS workout_templates (
   coach_id                   UUID NOT NULL REFERENCES coach_profiles(id),
   name                       VARCHAR(200) NOT NULL,
   description                TEXT,
-  estimated_duration_minutes INT,
   is_archived                BOOLEAN NOT NULL DEFAULT FALSE,
   created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_workout_templates_coach ON workout_templates(coach_id);
+ALTER TABLE workout_templates DROP COLUMN IF EXISTS estimated_duration_minutes;
 
 -- WORKOUT TEMPLATE EXERCISES
 CREATE TABLE IF NOT EXISTS workout_template_exercises (
@@ -115,7 +117,7 @@ CREATE TABLE IF NOT EXISTS workout_template_exercises (
   exercise_id          UUID NOT NULL REFERENCES exercises(id),
   order_index          SMALLINT NOT NULL,
   superset_group       SMALLINT,
-  prescribed_sets      SMALLINT NOT NULL DEFAULT 3,
+  prescribed_sets      SMALLINT,
   prescribed_reps      VARCHAR(50),
   prescribed_weight    VARCHAR(50),
   prescribed_tempo     VARCHAR(20),
@@ -146,7 +148,7 @@ CREATE TABLE IF NOT EXISTS workout_exercises (
   exercise_id          UUID NOT NULL REFERENCES exercises(id),
   order_index          SMALLINT NOT NULL,
   superset_group       SMALLINT,
-  prescribed_sets      SMALLINT NOT NULL DEFAULT 3,
+  prescribed_sets      SMALLINT,
   prescribed_reps      VARCHAR(50),
   prescribed_weight    VARCHAR(50),
   prescribed_tempo     VARCHAR(20),
@@ -154,6 +156,13 @@ CREATE TABLE IF NOT EXISTS workout_exercises (
   notes                TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_workout_exercises_workout ON workout_exercises(workout_id);
+
+
+-- Make prescribed_sets nullable in existing tables (idempotent)
+ALTER TABLE workout_template_exercises ALTER COLUMN prescribed_sets DROP NOT NULL;
+ALTER TABLE workout_template_exercises ALTER COLUMN prescribed_sets DROP DEFAULT;
+ALTER TABLE workout_exercises          ALTER COLUMN prescribed_sets DROP NOT NULL;
+ALTER TABLE workout_exercises          ALTER COLUMN prescribed_sets DROP DEFAULT;
 
 -- WORKOUT LOGS
 CREATE TABLE IF NOT EXISTS workout_logs (

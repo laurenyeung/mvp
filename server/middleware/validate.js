@@ -37,12 +37,10 @@ export const loginSchema = z.object({
 
 // ─── Exercises ────────────────────────────────────────────────────────────────
 export const createExerciseSchema = z.object({
-  name:                    requiredStr(200),
-  description:             safeStr(2000).optional(),
-  primary_muscle_group:    requiredStr(100),
-  secondary_muscle_groups: z.array(safeStr(100)).max(10).optional(),
-  equipment_required:      z.array(safeStr(100)).max(20).optional(),
-  is_public:               z.boolean().optional().default(false),
+  name:               requiredStr(200),
+  description:        safeStr(2000).optional(),
+  equipment_required: z.array(safeStr(100)).max(20).optional(),
+  is_public:          z.boolean().optional().default(false),
 })
 
 export const updateExerciseSchema = createExerciseSchema.partial()
@@ -51,8 +49,8 @@ export const updateExerciseSchema = createExerciseSchema.partial()
 const prescribedExerciseSchema = z.object({
   exercise_id:          uuidSchema,
   order_index:          z.number().int().min(0).max(200).optional(),
-  prescribed_sets:      z.number().int().min(1).max(20).optional(),
-  prescribed_reps:      safeStr(50).optional(),
+  prescribed_sets:      z.number().int().min(1).max(20).nullable().optional(),
+  prescribed_reps:      safeStr(50).nullable().optional(),
   prescribed_weight:    safeStr(50).optional(),
   prescribed_tempo:     safeStr(20).optional(),
   prescribed_rest_secs: z.number().int().min(0).max(600).nullable().optional(),
@@ -62,7 +60,6 @@ const prescribedExerciseSchema = z.object({
 export const createTemplateSchema = z.object({
   name:                       requiredStr(200),   // empty string must be rejected
   description:                safeStr(2000).optional(),
-  estimated_duration_minutes: z.number().int().min(1).max(300).nullable().optional(),
   exercises:                  z.array(prescribedExerciseSchema).max(50).optional().default([]),
 })
 
@@ -126,7 +123,10 @@ export const progressSchema = z.object({
   value:        z.number().min(0).max(9999),
   unit:         requiredStr(20),
   recorded_at:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD'),
-})
+}).refine(
+  data => data.metric_type !== 'CUSTOM' || (data.metric_label && data.metric_label.trim().length > 0),
+  { message: 'metric_label is required for CUSTOM metric type', path: ['metric_label'] }
+)
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
 export const sendMessageSchema = z.object({

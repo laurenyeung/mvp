@@ -16,8 +16,6 @@ export const loginSchema = z.object({
 export const exerciseSchema = z.object({
   name: z.string().min(1, 'Required'),
   description: z.string().optional(),
-  primary_muscle_group: z.string().min(1, 'Required'),
-  secondary_muscle_groups: z.array(z.string()).optional(),
   equipment_required: z.array(z.string()).optional(),
   is_public: z.boolean().default(false),
 })
@@ -25,7 +23,6 @@ export const exerciseSchema = z.object({
 export const templateSchema = z.object({
   name: z.string().min(1, 'Required'),
   description: z.string().optional(),
-  estimated_duration_minutes: z.coerce.number().optional(),
 })
 
 export const progressSchema = z.object({

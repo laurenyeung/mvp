@@ -37,8 +37,8 @@ function AddMetricModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center p-4">
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className="bg-white rounded-xl w-full max-w-md border border-pixel-border shadow-card-hover">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-pixel-border">
           <h2 className="font-semibold text-gray-900">Log Metric</h2>
           <button onClick={onClose} className="btn-ghost p-1.5"><X size={18} /></button>
         </div>
@@ -89,7 +89,7 @@ function AddMetricModal({ onClose }) {
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-white border border-gray-100 shadow-lg rounded-xl px-3 py-2 text-sm">
+    <div className="bg-white border border-pixel-border rounded shadow-card px-3 py-2 text-sm">
       <p className="text-gray-500 text-xs">{label}</p>
       <p className="font-bold text-gray-900">{payload[0].value} {payload[0].payload.unit}</p>
     </div>
@@ -136,10 +136,11 @@ export default function ProgressPage() {
             key={m}
             onClick={() => setActiveMetric(m)}
             className={cn(
-              'shrink-0 px-4 py-2 rounded-full text-sm font-medium border transition-colors',
+              'shrink-0 px-4 py-2 text-sm font-medium border-2 transition-colors',
+              'font-mono uppercase tracking-wide',
               activeMetric === m
-                ? 'bg-brand-600 text-white border-brand-600'
-                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                ? 'bg-pixel-accent text-gray-900 border-pixel-accent'
+                : 'bg-white text-gray-500 border-pixel-line hover:border-pixel-accent hover:text-pixel-dim'
             )}
           >
             {m}
@@ -174,17 +175,17 @@ export default function ProgressPage() {
         <div className="card p-4 mb-5">
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} domain={['auto', 'auto']} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E8E8E8" />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#737373' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#737373' }} domain={['auto', 'auto']} />
               <Tooltip content={<CustomTooltip />} />
               <Line
                 type="monotone"
                 dataKey="value"
-                stroke="#0284c7"
-                strokeWidth={2.5}
-                dot={{ r: 4, fill: '#0284c7', strokeWidth: 0 }}
-                activeDot={{ r: 6 }}
+                stroke="#FF6200"
+                strokeWidth={2}
+                dot={{ r: 4, fill: '#FF6200', strokeWidth: 0 }}
+                activeDot={{ r: 6, fill: '#D44500' }}
               />
             </LineChart>
           </ResponsiveContainer>

@@ -48,7 +48,7 @@ export default function ClientDetailPage() {
 
       {/* Client header */}
       <div className="card p-5 mb-5 flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-bold text-lg shrink-0">
+        <div className="w-14 h-14 rounded-full bg-pixel-accent flex items-center justify-center font-bold text-base shrink-0 text-gray-900">
           {getInitials(client.first_name, client.last_name)}
         </div>
         <div className="flex-1 min-w-0">

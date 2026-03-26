@@ -48,10 +48,10 @@ export default function TemplateBuilderModal({ template, onClose }) {
 
   const [name, setName] = useState(template?.name || '')
   const [description, setDescription] = useState(template?.description || '')
-  const [duration, setDuration] = useState(template?.estimated_duration_minutes || '')
   const [exercises, setExercises] = useState(template?.exercises || [])
   const [exSearch, setExSearch] = useState('')
   const [showPicker, setShowPicker] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   const { data: exerciseResults } = useQuery({
     queryKey: ['exercises', exSearch],
@@ -68,10 +68,14 @@ export default function TemplateBuilderModal({ template, onClose }) {
       qc.invalidateQueries({ queryKey: ['templates'] })
       onClose()
     },
+    onError: (err) => {
+      const msg = err.response?.data?.error?.message
+      setSaveError(msg || 'Something went wrong')
+    },
   })
 
   const addExercise = (ex) => {
-    setExercises(prev => [...prev, { ...ex, prescribed_sets: '3', prescribed_reps: '10' }])
+    setExercises(prev => [...prev, { ...ex, prescribed_sets: '', prescribed_reps: '' }])
     setShowPicker(false)
     setExSearch('')
   }
@@ -86,12 +90,13 @@ export default function TemplateBuilderModal({ template, onClose }) {
     mutate({
       name,
       description,
-      estimated_duration_minutes: duration ? Number(duration) : undefined,
       exercises: exercises.map((ex, i) => ({
-        exercise_id: ex.id,
+        // ex.exercise_id exists when loaded from an existing template (ex.id is the wte row id)
+        // ex.id is the exercise id when newly added from the picker
+        exercise_id: ex.exercise_id ?? ex.id,
         order_index: i,
-        prescribed_sets: Number(ex.prescribed_sets) || 3,
-        prescribed_reps: ex.prescribed_reps || '10',
+        prescribed_sets: ex.prescribed_sets !== '' && ex.prescribed_sets != null ? Number(ex.prescribed_sets) : null,
+        prescribed_reps: ex.prescribed_reps || null,
         prescribed_rest_secs: ex.prescribed_rest_secs ? Number(ex.prescribed_rest_secs) : null,
         notes: ex.notes || null,
       })),
@@ -100,9 +105,9 @@ export default function TemplateBuilderModal({ template, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center">
-      <div className="bg-white w-full max-w-lg rounded-t-2xl md:rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-xl w-full max-w-lg border border-pixel-border max-h-[90vh] flex flex-col shadow-card-hover">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-pixel-border shrink-0">
           <h2 className="font-semibold text-gray-900">{isEdit ? 'Edit Template' : 'New Template'}</h2>
           <button onClick={onClose} className="btn-ghost p-1.5"><X size={18} /></button>
         </div>
@@ -111,13 +116,7 @@ export default function TemplateBuilderModal({ template, onClose }) {
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           <div>
             <label className="label">Template Name *</label>
-            <input value={name} onChange={e => setName(e.target.value)} className="input" placeholder="e.g. Upper Body A" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Duration (min)</label>
-              <input value={duration} onChange={e => setDuration(e.target.value)} type="number" className="input" placeholder="45" />
-            </div>
+            <input value={name} onChange={e => { setName(e.target.value); setSaveError('') }} className="input" placeholder="e.g. Upper Body A" />
           </div>
           <div>
             <label className="label">Description</label>
@@ -144,7 +143,7 @@ export default function TemplateBuilderModal({ template, onClose }) {
 
           {/* Exercise picker */}
           {showPicker && (
-            <div className="card border-brand-200 p-3">
+            <div className="card border-pixel-line p-3">
               <div className="relative mb-2">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
@@ -160,10 +159,9 @@ export default function TemplateBuilderModal({ template, onClose }) {
                   <button
                     key={ex.id}
                     onClick={() => addExercise(ex)}
-                    className="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-brand-50 flex items-center justify-between"
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 hover:text-pixel-accent flex items-center justify-between border-l-2 border-transparent hover:border-pixel-accent"
                   >
                     <span className="font-medium">{ex.name}</span>
-                    <span className="text-xs text-gray-400">{ex.primary_muscle_group}</span>
                   </button>
                 ))}
               </div>
@@ -173,11 +171,16 @@ export default function TemplateBuilderModal({ template, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="p-5 border-t border-gray-100 shrink-0 flex gap-3">
+        <div className="p-5 border-t border-pixel-border shrink-0">
+          {saveError && (
+            <p className="text-red-500 text-sm mb-3">{saveError}</p>
+          )}
+          <div className="flex gap-3">
           <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
           <button onClick={handleSave} disabled={isPending || !name.trim()} className="btn-primary flex-1">
             {isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Template'}
           </button>
+          </div>
         </div>
       </div>
     </div>

@@ -9,7 +9,7 @@ export default function AppShell() {
   const isMobile = useMediaQuery('(max-width: 768px)')
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="flex h-screen overflow-hidden bg-pixel-bg">
       {!isMobile && <Sidebar role={user?.role} />}
       <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
         <Outlet />

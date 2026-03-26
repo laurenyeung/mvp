@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { Calendar, CheckCircle2, XCircle, Clock } from 'lucide-react'
 import { clientApi } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
@@ -11,7 +12,8 @@ const STATUS_STYLES = {
 }
 
 export default function WorkoutHistoryPage() {
-  const { data: workouts, isLoading } = useQuery({
+  const navigate = useNavigate()
+  const { data: workouts, isLoading, isError } = useQuery({
     queryKey: ['workouts-history'],
     queryFn: () => clientApi.listWorkouts().then(r => r.data.data),
   })
@@ -26,6 +28,11 @@ export default function WorkoutHistoryPage() {
             <div key={i} className="card p-4 animate-pulse h-20 bg-gray-100" />
           ))}
         </div>
+      ) : isError ? (
+        <div className="text-center py-20 text-gray-400">
+          <Calendar size={40} className="mx-auto mb-3 opacity-30" />
+          <p>Could not load workouts. Please try again.</p>
+        </div>
       ) : workouts?.length === 0 ? (
         <div className="text-center py-20 text-gray-400">
           <Calendar size={40} className="mx-auto mb-3 opacity-30" />
@@ -36,7 +43,7 @@ export default function WorkoutHistoryPage() {
           {workouts?.map(w => {
             const { icon: Icon, color, bg, label } = STATUS_STYLES[w.status] || STATUS_STYLES.SCHEDULED
             return (
-              <div key={w.id} className="card p-4 flex items-center gap-3">
+              <div key={w.id} className="card p-4 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => navigate(`/client/workouts/${w.id}/log`)}>
                 <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', bg)}>
                   <Icon size={20} className={color} />
                 </div>

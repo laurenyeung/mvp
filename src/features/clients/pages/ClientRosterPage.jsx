@@ -76,7 +76,7 @@ export default function ClientRosterPage() {
               onClick={() => navigate(`/coach/clients/${c.id}`)}
               className="card p-4 flex items-center gap-3 w-full hover:shadow-md transition-shadow"
             >
-              <div className="w-11 h-11 rounded-full bg-brand-100 flex items-center justify-center shrink-0 text-brand-700 font-bold text-sm">
+              <div className="w-11 h-11 rounded-full bg-pixel-accent flex items-center justify-center shrink-0 font-bold text-sm text-gray-900">
                 {getInitials(c.first_name, c.last_name)}
               </div>
               <div className="flex-1 text-left min-w-0">

@@ -5,8 +5,6 @@ import { X } from 'lucide-react'
 import { exerciseSchema } from '@/lib/validationSchemas'
 import { exercisesApi } from '@/lib/api'
 
-const MUSCLES = ['Chest','Back','Shoulders','Biceps','Triceps','Legs','Glutes','Core','Calves']
-
 export default function CreateExerciseModal({ onClose }) {
   const qc = useQueryClient()
   const { register, handleSubmit, formState: { errors } } = useForm({
@@ -24,8 +22,8 @@ export default function CreateExerciseModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center p-4">
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className="bg-white rounded-xl w-full max-w-md border border-pixel-border shadow-card-hover">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-pixel-border">
           <h2 className="font-semibold text-gray-900">New Exercise</h2>
           <button onClick={onClose} className="btn-ghost p-1.5"><X size={18} /></button>
         </div>
@@ -35,15 +33,6 @@ export default function CreateExerciseModal({ onClose }) {
             <label className="label">Name *</label>
             <input {...register('name')} className="input" placeholder="e.g. Barbell Back Squat" />
             {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
-          </div>
-
-          <div>
-            <label className="label">Primary Muscle Group *</label>
-            <select {...register('primary_muscle_group')} className="input">
-              <option value="">Select…</option>
-              {MUSCLES.map(m => <option key={m}>{m}</option>)}
-            </select>
-            {errors.primary_muscle_group && <p className="text-red-500 text-xs mt-1">{errors.primary_muscle_group.message}</p>}
           </div>
 
           <div>

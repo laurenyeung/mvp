@@ -14,24 +14,22 @@ router.use(requireAuth)
 // GET /exercises
 router.get('/', async (req, res, next) => {
   try {
-    // Clamp limit to 1–100 — prevents DoS via limit=9999999
     const pagination = paginationSchema.safeParse(req.query)
     const { limit, page } = pagination.success ? pagination.data : { limit: 40, page: 1 }
     const offset = (page - 1) * limit
 
-    // Validate optional filter params
     const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 100) : null
-    const muscle = typeof req.query.muscle === 'string' ? req.query.muscle.trim().slice(0, 100) : null
 
     const params = [req.user.id]
     let where = `(is_public=true OR created_by=$1)`
-    if (search) { params.push(`%${search}%`); where += ` AND name ILIKE $${params.length}` }
-    if (muscle) { params.push(muscle);         where += ` AND primary_muscle_group=$${params.length}` }
+    if (search) {
+      params.push(`%${search}%`)
+      where += ` AND name ILIKE $${params.length}`
+    }
     params.push(limit, offset)
 
     const { rows } = await query(
-      `SELECT id, name, description, primary_muscle_group, secondary_muscle_groups,
-              equipment_required, is_public, created_by, created_at
+      `SELECT id, name, description, equipment_required, is_public, created_by, created_at
        FROM exercises
        WHERE ${where}
        ORDER BY name
@@ -45,7 +43,6 @@ router.get('/', async (req, res, next) => {
 // GET /exercises/:id
 router.get('/:id', async (req, res, next) => {
   try {
-    // Validate UUID format to prevent malformed DB queries
     const idParsed = uuidSchema.safeParse(req.params.id)
     if (!idParsed.success) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Exercise not found' } })
 
@@ -65,16 +62,13 @@ router.post('/', requireRole('COACH', 'ADMIN'), async (req, res, next) => {
         error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0].message },
       })
     }
-    const { name, description, primary_muscle_group, secondary_muscle_groups, equipment_required, is_public } = parsed.data
+    const { name, description, equipment_required, is_public } = parsed.data
 
     const { rows } = await query(
       `INSERT INTO exercises
-         (name, description, primary_muscle_group, secondary_muscle_groups,
-          equipment_required, created_by, is_public)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [name, description ?? null, primary_muscle_group,
-       secondary_muscle_groups ?? [], equipment_required ?? [],
-       req.user.id, is_public]
+         (name, description, equipment_required, created_by, is_public)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [name, description ?? null, equipment_required ?? [], req.user.id, is_public]
     )
     res.status(201).json({ data: rows[0] })
   } catch (err) { next(err) }
@@ -99,15 +93,14 @@ router.patch('/:id', requireRole('COACH', 'ADMIN'), async (req, res, next) => {
       return res.status(403).json({ error: { code: 'NOT_YOUR_RESOURCE', message: 'Forbidden' } })
     }
 
-    const { name, description, primary_muscle_group, is_public } = parsed.data
+    const { name, description, is_public } = parsed.data
     const { rows } = await query(
       `UPDATE exercises
        SET name=COALESCE($1,name),
            description=COALESCE($2,description),
-           primary_muscle_group=COALESCE($3,primary_muscle_group),
-           is_public=COALESCE($4,is_public)
-       WHERE id=$5 RETURNING *`,
-      [name ?? null, description ?? null, primary_muscle_group ?? null, is_public ?? null, idParsed.data]
+           is_public=COALESCE($3,is_public)
+       WHERE id=$4 RETURNING *`,
+      [name ?? null, description ?? null, is_public ?? null, idParsed.data]
     )
     res.json({ data: rows[0] })
   } catch (err) { next(err) }

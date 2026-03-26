@@ -22,7 +22,7 @@ async function attachExercises(workouts) {
   if (!workouts.length) return workouts
   const ids = workouts.map(w => w.id)
   const { rows: exRows } = await query(
-    `SELECT we.*, e.name, e.primary_muscle_group, e.description
+    `SELECT we.*, e.name, e.description
      FROM workout_exercises we
      JOIN exercises e ON e.id = we.exercise_id
      WHERE we.workout_id = ANY($1::uuid[])
@@ -38,16 +38,19 @@ async function attachExercises(workouts) {
 }
 
 // ─── GET /client/workouts/today ───────────────────────────────────────────────
+// Returns ALL workouts scheduled for today (multiple same-day workouts are supported)
+// Returns empty array — not 404 — for valid CLIENT users with no profile yet.
 router.get('/workouts/today', async (req, res, next) => {
   try {
-    const clientId = await getClientProfileId(req.user.id)
+    const { rows: cpRows } = await query('SELECT id FROM client_profiles WHERE user_id=$1', [req.user.id])
+    if (!cpRows.length) return res.json({ data: [] })
+    const clientId = cpRows[0].id
     const today = new Date().toISOString().split('T')[0]
     const { rows } = await query(
-      `SELECT * FROM workouts WHERE client_id=$1 AND scheduled_date=$2 LIMIT 1`,
+      `SELECT * FROM workouts WHERE client_id=$1 AND scheduled_date=$2 ORDER BY created_at ASC`,
       [clientId, today]
     )
-    if (!rows.length) return res.json({ data: null })
-    const [enriched] = await attachExercises(rows)
+    const enriched = await attachExercises(rows)
     res.json({ data: enriched })
   } catch (err) { next(err) }
 })
@@ -55,7 +58,9 @@ router.get('/workouts/today', async (req, res, next) => {
 // ─── GET /client/workouts/upcoming ───────────────────────────────────────────
 router.get('/workouts/upcoming', async (req, res, next) => {
   try {
-    const clientId = await getClientProfileId(req.user.id)
+    const { rows: cpUp } = await query('SELECT id FROM client_profiles WHERE user_id=$1', [req.user.id])
+    if (!cpUp.length) return res.json({ data: [] })
+    const clientId = cpUp[0].id
     const today = new Date().toISOString().split('T')[0]
     const { rows } = await query(
       `SELECT * FROM workouts
@@ -71,7 +76,9 @@ router.get('/workouts/upcoming', async (req, res, next) => {
 // ─── GET /client/workouts/past ────────────────────────────────────────────────
 router.get('/workouts/past', async (req, res, next) => {
   try {
-    const clientId = await getClientProfileId(req.user.id)
+    const { rows: cpPast } = await query('SELECT id FROM client_profiles WHERE user_id=$1', [req.user.id])
+    if (!cpPast.length) return res.json({ data: [] })
+    const clientId = cpPast[0].id
     const today = new Date().toISOString().split('T')[0]
     const { rows } = await query(
       `SELECT * FROM workouts
@@ -87,7 +94,9 @@ router.get('/workouts/past', async (req, res, next) => {
 // ─── GET /client/workouts ─────────────────────────────────────────────────────
 router.get('/workouts', async (req, res, next) => {
   try {
-    const clientId = await getClientProfileId(req.user.id)
+    const { rows: cpRows } = await query('SELECT id FROM client_profiles WHERE user_id=$1', [req.user.id])
+    if (!cpRows.length) return res.json({ data: [] })
+    const clientId = cpRows[0].id
     const ALLOWED_STATUSES = ['SCHEDULED', 'COMPLETED', 'MISSED']
     const status = ALLOWED_STATUSES.includes(req.query.status) ? req.query.status : null
 
@@ -128,6 +137,20 @@ router.post('/workouts/:workoutId/log', async (req, res, next) => {
       [idParsed.data, clientId]
     )
     if (!wRows.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Workout not found' } })
+
+    // Validate all workout_exercise_ids belong to this workout — prevents cross-workout data corruption
+    if (exercise_logs.length > 0) {
+      const submittedIds = exercise_logs.map(el => el.workout_exercise_id)
+      const { rows: validExercises } = await query(
+        `SELECT id FROM workout_exercises WHERE workout_id=$1 AND id=ANY($2::uuid[])`,
+        [idParsed.data, submittedIds]
+      )
+      if (validExercises.length !== submittedIds.length) {
+        return res.status(400).json({
+          error: { code: 'VALIDATION_ERROR', message: 'One or more workout_exercise_ids do not belong to this workout' }
+        })
+      }
+    }
 
     const log = await transaction(async (client) => {
       // Upsert the workout log
@@ -358,6 +381,50 @@ router.post('/progress', async (req, res, next) => {
       [clientId, metric_type, metric_label ?? null, value, unit, recorded_at]
     )
     res.status(201).json({ data: rows[0] })
+  } catch (err) { next(err) }
+})
+
+
+// ─── GET /client/notifications ───────────────────────────────────────────────
+// Returns unread notifications for the client, newest first.
+// ?all=true returns all (including read). Mark-as-read via PATCH.
+router.get('/notifications', async (req, res, next) => {
+  try {
+    const onlyUnread = req.query.all !== 'true'
+    const params = [req.user.id]
+    let where = 'user_id=$1'
+    if (onlyUnread) where += ' AND is_read=false'
+
+    const { rows } = await query(
+      `SELECT * FROM notifications WHERE ${where} ORDER BY created_at DESC LIMIT 50`,
+      params
+    )
+    res.json({ data: rows })
+  } catch (err) { next(err) }
+})
+
+// ─── PATCH /client/notifications/read-all ────────────────────────────────────
+router.patch('/notifications/read-all', async (req, res, next) => {
+  try {
+    const { rows } = await query(
+      'UPDATE notifications SET is_read=true WHERE user_id=$1 AND is_read=false RETURNING id',
+      [req.user.id]
+    )
+    res.json({ data: { marked_read: rows.length } })
+  } catch (err) { next(err) }
+})
+
+// ─── PATCH /client/notifications/:id/read ────────────────────────────────────
+router.patch('/notifications/:id/read', async (req, res, next) => {
+  try {
+    const idParsed = uuidSchema.safeParse(req.params.id)
+    if (!idParsed.success) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Not found' } })
+    const { rows } = await query(
+      'UPDATE notifications SET is_read=true WHERE id=$1 AND user_id=$2 RETURNING *',
+      [idParsed.data, req.user.id]
+    )
+    if (!rows.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Notification not found' } })
+    res.json({ data: rows[0] })
   } catch (err) { next(err) }
 })
 

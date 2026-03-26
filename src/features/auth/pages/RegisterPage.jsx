@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Zap, Dumbbell, Users } from 'lucide-react'
+import { Dumbbell, Users } from 'lucide-react'
 import { registerSchema } from '@/lib/validationSchemas'
 import { authApi } from '@/lib/api'
 import { useAuthStore } from '../store/authStore'
@@ -37,24 +37,28 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-50 to-white flex items-center justify-center px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center px-4 py-8 bg-pixel-bg">
       <div className="w-full max-w-sm">
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-brand-600 flex items-center justify-center mb-3 shadow-lg">
-            <Zap size={28} className="text-white" />
+
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-pixel-accent mb-4">
+            <span className="text-lg font-black text-gray-900">LI</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Create Account</h1>
-          <p className="text-gray-500 text-sm mt-1">Join FitTrack today</p>
+          <h1 className="text-2xl font-black text-gray-900">Create Account</h1>
+          <p className="mt-1 text-sm text-gray-500">Join LockedIn today</p>
         </div>
 
-        <div className="card p-6">
+        {/* Form */}
+        <div className="bg-white rounded-xl shadow-card border border-pixel-border p-6">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+
             {/* Role selector */}
             <div>
-              <label className="label">I am a…</label>
+              <label className="label">I am a</label>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { value: 'CLIENT', icon: Dumbbell, label: 'Client' },
+                  { value: 'CLIENT', icon: Dumbbell, label: 'Athlete' },
                   { value: 'COACH', icon: Users, label: 'Coach' },
                 ].map(({ value, icon: Icon, label }) => (
                   <button
@@ -62,13 +66,13 @@ export default function RegisterPage() {
                     type="button"
                     onClick={() => setValue('role', value)}
                     className={cn(
-                      'flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-sm font-medium transition-all',
+                      'flex flex-col items-center gap-1.5 py-3 rounded border-2 text-sm font-semibold transition-all',
                       role === value
-                        ? 'border-brand-500 bg-brand-50 text-brand-700'
-                        : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                        ? 'border-pixel-accent bg-orange-50 text-pixel-dim'
+                        : 'border-pixel-border text-gray-500 hover:border-pixel-line'
                     )}
                   >
-                    <Icon size={20} />
+                    <Icon size={20} strokeWidth={role === value ? 2 : 1.5} />
                     {label}
                   </button>
                 ))}
@@ -79,29 +83,37 @@ export default function RegisterPage() {
               <div>
                 <label className="label">First Name</label>
                 <input {...register('first_name')} className="input" placeholder="Alex" />
-                {errors.first_name && <p className="text-red-500 text-xs mt-1">{errors.first_name.message}</p>}
+                {errors.first_name && (
+                  <p className="mt-1 text-xs text-red-600">{errors.first_name.message}</p>
+                )}
               </div>
               <div>
                 <label className="label">Last Name</label>
                 <input {...register('last_name')} className="input" placeholder="Smith" />
-                {errors.last_name && <p className="text-red-500 text-xs mt-1">{errors.last_name.message}</p>}
+                {errors.last_name && (
+                  <p className="mt-1 text-xs text-red-600">{errors.last_name.message}</p>
+                )}
               </div>
             </div>
 
             <div>
               <label className="label">Email</label>
               <input {...register('email')} type="email" className="input" placeholder="you@example.com" />
-              {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
+              {errors.email && (
+                <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>
+              )}
             </div>
 
             <div>
               <label className="label">Password</label>
               <input {...register('password')} type="password" className="input" placeholder="Min 8 characters" />
-              {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
+              {errors.password && (
+                <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>
+              )}
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
+              <div className="rounded bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
                 {error}
               </div>
             )}
@@ -112,9 +124,11 @@ export default function RegisterPage() {
           </form>
         </div>
 
-        <p className="text-center text-sm text-gray-500 mt-4">
+        <p className="text-center mt-5 text-sm text-gray-500">
           Already have an account?{' '}
-          <Link to="/login" className="text-brand-600 font-medium hover:underline">Sign in</Link>
+          <Link to="/login" className="font-semibold text-pixel-dim hover:underline">
+            Sign in
+          </Link>
         </p>
       </div>
     </div>

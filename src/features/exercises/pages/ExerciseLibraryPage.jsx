@@ -5,18 +5,15 @@ import { exercisesApi } from '@/lib/api'
 import { useAuthStore } from '@/features/auth/store/authStore'
 import CreateExerciseModal from '../components/CreateExerciseModal.jsx'
 
-const MUSCLE_GROUPS = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Legs', 'Glutes', 'Core', 'Calves']
-
 export default function ExerciseLibraryPage() {
   const { user } = useAuthStore()
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
-  const [muscle, setMuscle] = useState('')
   const [showCreate, setShowCreate] = useState(false)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['exercises', search, muscle],
-    queryFn: () => exercisesApi.list({ search, muscle, limit: 40 }).then(r => r.data.data),
+    queryKey: ['exercises', search],
+    queryFn: () => exercisesApi.list({ search, limit: 40 }).then(r => r.data.data),
   })
 
   return (
@@ -47,23 +44,6 @@ export default function ExerciseLibraryPage() {
         )}
       </div>
 
-      {/* Muscle filter pills */}
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-none">
-        {['All', ...MUSCLE_GROUPS].map(m => (
-          <button
-            key={m}
-            onClick={() => setMuscle(m === 'All' ? '' : m)}
-            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-              (m === 'All' && !muscle) || muscle === m
-                ? 'bg-brand-600 text-white border-brand-600'
-                : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-            }`}
-          >
-            {m}
-          </button>
-        ))}
-      </div>
-
       {/* List */}
       {isLoading ? (
         <div className="space-y-3">
@@ -86,7 +66,6 @@ export default function ExerciseLibraryPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 text-sm">{ex.name}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{ex.primary_muscle_group}</p>
                 {ex.description && (
                   <p className="text-xs text-gray-400 mt-1 line-clamp-2">{ex.description}</p>
                 )}
