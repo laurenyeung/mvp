@@ -34,11 +34,10 @@
   }
 
   .btn-primary {
-    @apply btn bg-pixel-accent text-gray-900 hover:bg-orange-600 active:scale-95;
+    @apply btn bg-pixel-accent text-gray-900 active:scale-95;
   }
-  /* orange-600 override since Tailwind orange-600 ≠ our accent — use inline bg instead */
   .btn-primary:hover:not(:disabled) {
-    background-color: #E85700;
+    background-color: #C96A00;
   }
 
   .btn-secondary {
@@ -58,7 +57,7 @@
   .input {
     @apply w-full border border-pixel-line rounded bg-white px-3.5 py-2.5
            text-sm text-gray-900 placeholder-gray-400
-           focus:outline-none focus:border-pixel-accent focus:ring-2 focus:ring-orange-100
+           focus:outline-none focus:border-pixel-accent focus:ring-2 focus:ring-brand-100
            transition-colors;
   }
 

@@ -1,4 +1,4 @@
-# CLAUDE.md — FitTrack MVP
+# CLAUDE.md — LockedIn
 
 Operating rules for Claude when working on this repository. Read this file at the start of every session. Update `tasks/lessons.md` after every correction.
 
@@ -104,9 +104,11 @@ Before saying "done" or "that should fix it":
 - For API changes: show a curl or the relevant response
 - For DB changes: confirm the migration ran and the schema matches
 - For frontend changes: confirm the component renders without console errors
+- Run `npm audit` in `server/` — fix any moderate+ severity findings before calling done
 - Ask yourself: *"Would a staff engineer approve this PR?"*
   - Tests pass ✓
   - No regressions ✓
+  - `npm audit` clean (no moderate+ vulnerabilities) ✓
   - Edge cases considered ✓
   - Error handling present ✓
 

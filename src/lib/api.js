@@ -71,6 +71,7 @@ export const clientApi = {
   upcomingWorkouts:()       => api.get('/client/workouts/upcoming'),
   pastWorkouts:    ()       => api.get('/client/workouts/past'),
   listWorkouts:    (params) => api.get('/client/workouts', { params }),
+  getWorkout:      (id)     => api.get(`/client/workouts/${id}`),
   logWorkout:      (workoutId, body) => api.post(`/client/workouts/${workoutId}/log`, body),
 
   // Media

@@ -39,15 +39,15 @@ export default function AddClientModal({ onClose }) {
   const showList     = isSearching && results.length > 0
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center p-4">
-      <div className="bg-white rounded-xl w-full max-w-md border border-pixel-border shadow-card-hover">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl w-full max-w-md border border-pixel-border shadow-card-hover max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-pixel-border">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-pixel-border shrink-0">
           <h2 className="font-semibold text-gray-900">Add Client</h2>
           <button onClick={onClose} className="btn-ghost p-1.5"><X size={18} /></button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="p-5 space-y-4 overflow-y-auto">
           <p className="text-sm text-gray-500">
             Search for a user who has already registered with a <strong>Client</strong> account.
           </p>
@@ -124,7 +124,7 @@ export default function AddClientModal({ onClose }) {
 
           {/* Selected summary */}
           {selected && (
-            <div className="bg-orange-50 border-2 border-pixel-accent rounded px-4 py-3 flex items-center gap-3">
+            <div className="bg-brand-50 border-2 border-pixel-accent rounded px-4 py-3 flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-pixel-accent flex items-center justify-center font-bold text-sm text-gray-900 shrink-0">
                 {getInitials(selected.first_name, selected.last_name)}
               </div>

@@ -3,6 +3,7 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 
+import { logger } from './lib/logger.js'
 import { apiLimiter } from './middleware/rateLimiter.js'
 import authRoutes     from './routes/auth.js'
 import exerciseRoutes from './routes/exercises.js'
@@ -57,6 +58,25 @@ if (process.env.NODE_ENV !== 'test') {
   app.use('/api/', apiLimiter)
 }
 
+// ─── Request audit logging ────────────────────────────────────────────────────
+// Log all mutating requests with user context, path, status and latency.
+app.use((req, _res, next) => {
+  const start = Date.now()
+  _res.on('finish', () => {
+    if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method)) {
+      logger.info('REQUEST', {
+        method:  req.method,
+        path:    req.path,
+        status:  _res.statusCode,
+        ms:      Date.now() - start,
+        userId:  req.user?.id ?? null,
+        ip:      req.ip,
+      })
+    }
+  })
+  next()
+})
+
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
 
@@ -83,6 +103,7 @@ app.use((err, _req, res, _next) => {
     return res.status(status).json({ error: { code, message: err.message, stack: err.stack } })
   }
 
+  logger.error('UNHANDLED_ERROR', { code, message: err.message, status })
   console.error(`[${new Date().toISOString()}] ${code}: ${err.message}`)
   const message = status < 500 ? err.message : 'Something went wrong'
   res.status(status).json({ error: { code, message } })
@@ -93,6 +114,7 @@ if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
     console.log(`🚀  Server running on http://localhost:${PORT}`)
     console.log(`    Environment: ${process.env.NODE_ENV ?? 'development'}`)
+    logger.info('SERVER_START', { port: PORT, env: process.env.NODE_ENV ?? 'development' })
   })
 }
 

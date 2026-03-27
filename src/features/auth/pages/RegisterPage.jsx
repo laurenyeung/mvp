@@ -68,7 +68,7 @@ export default function RegisterPage() {
                     className={cn(
                       'flex flex-col items-center gap-1.5 py-3 rounded border-2 text-sm font-semibold transition-all',
                       role === value
-                        ? 'border-pixel-accent bg-orange-50 text-pixel-dim'
+                        ? 'border-pixel-accent bg-brand-50 text-pixel-dim'
                         : 'border-pixel-border text-gray-500 hover:border-pixel-line'
                     )}
                   >

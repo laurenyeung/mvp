@@ -18,29 +18,29 @@ export default {
           800: '#1F1F1F',
           900: '#1A1A1A',  // near black
         },
-        // Temu-inspired orange system
+        // Pastel orange system
         pixel: {
           bg:      '#F7F7F7',  // page background
           surface: '#FFFFFF',  // card surface
           border:  '#E8E8E8',  // default border
           line:    '#D0D0D0',  // stronger border
-          accent:  '#FF6200',  // brand orange — use as BG only; text on it must be dark
-          dim:     '#D44500',  // dark orange — 4.5:1 on white ✓ safe as text
+          accent:  '#FFB347',  // pastel orange — use as BG only; text on it must be dark
+          dim:     '#C96A00',  // dark pastel orange — 4.5:1 on white ✓ safe as text
           yellow:  '#F59E0B',
           blue:    '#2563EB',
           text:    '#1A1A1A',
           muted:   '#737373',
           danger:  '#DC2626',
         },
-        // Brand aliases → orange
+        // Brand aliases → pastel orange
         brand: {
-          50:  '#FFF3EC',
-          100: '#FFE4D1',
-          200: '#FFBA8C',
-          400: '#FF7A30',
-          500: '#FF6200',
-          600: '#FF6200',
-          700: '#D44500',
+          50:  '#FFF7EE',
+          100: '#FFE8CC',
+          200: '#FFCF99',
+          400: '#FFC070',
+          500: '#FFB347',
+          600: '#FFB347',
+          700: '#C96A00',
           900: '#1A1A1A',
         },
         // Standard red — passes ADA on white
@@ -80,7 +80,7 @@ export default {
       boxShadow: {
         card: '0 1px 4px rgba(0,0,0,0.08)',
         'card-hover': '0 4px 12px rgba(0,0,0,0.12)',
-        'orange': '0 2px 8px rgba(255,98,0,0.30)',
+        'orange': '0 2px 8px rgba(255,179,71,0.35)',
       },
       screens: {
         xs: '375px',

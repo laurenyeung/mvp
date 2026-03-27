@@ -36,13 +36,13 @@ function AddMetricModal({ onClose }) {
   })
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center p-4">
-      <div className="bg-white rounded-xl w-full max-w-md border border-pixel-border shadow-card-hover">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-pixel-border">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl w-full max-w-md border border-pixel-border shadow-card-hover max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-pixel-border shrink-0">
           <h2 className="font-semibold text-gray-900">Log Metric</h2>
           <button onClick={onClose} className="btn-ghost p-1.5"><X size={18} /></button>
         </div>
-        <form onSubmit={handleSubmit(d => mutate(d))} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit(d => mutate(d))} className="p-5 space-y-4 overflow-y-auto">
           <div>
             <label className="label">Metric Type</label>
             <select {...register('metric_type')} className="input">

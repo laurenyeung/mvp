@@ -707,7 +707,7 @@ describe('Section 6 — Workout Logging', () => {
     expect(act).toHaveLength(1)
   })
 
-  test('TC-LOG-002 · Re-submit updates workout log — no duplicate row', async () => {
+  test('TC-LOG-002 · Re-submit with exercise_logs:[] updates rating only — prior exercise_logs untouched', async () => {
     const res = await request(app)
       .post(`/api/v1/client/workouts/${workoutId}/log`)
       .set('Authorization', `Bearer ${clientToken}`)
@@ -717,6 +717,9 @@ describe('Section 6 — Workout Logging', () => {
     const { rows } = await testPool.query('SELECT * FROM workout_logs WHERE workout_id=$1', [workoutId])
     expect(rows).toHaveLength(1)  // still one row
     expect(rows[0].rating).toBe(5) // updated
+    // exercise_logs from TC-LOG-001 must still exist — empty array means "don't touch"
+    const { rows: el } = await testPool.query('SELECT id FROM exercise_logs WHERE workout_log_id=$1', [workoutLogId])
+    expect(el).toHaveLength(1)
   })
 
   test('TC-LOG-003 · Logging a workout the client doesn\'t own returns 404', async () => {
@@ -725,6 +728,137 @@ describe('Section 6 — Workout Logging', () => {
       .post(`/api/v1/client/workouts/${otherWorkoutId}/log`)
       .set('Authorization', `Bearer ${clientToken}`)
       .send({ exercise_logs: [] })
+    expect(res.status).toBe(404)
+  })
+
+  test('TC-LOG-005 · GET /client/workouts/:id returns exercise_log with sets for COMPLETED workout', async () => {
+    const res = await request(app)
+      .get(`/api/v1/client/workouts/${workoutId}`)
+      .set('Authorization', `Bearer ${clientToken}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.id).toBe(workoutId)
+    expect(res.body.data.status).toBe('COMPLETED')
+    const ex = res.body.data.exercises[0]
+    expect(ex.exercise_log).not.toBeNull()
+    expect(ex.exercise_log.actual_sets).toBe(3)
+    expect(ex.exercise_log.sets).toHaveLength(3)
+    expect(Number(ex.exercise_log.sets[0].reps)).toBe(8)
+    expect(Number(ex.exercise_log.sets[1].weight)).toBe(145)
+  })
+
+  test('TC-LOG-006 · GET /client/workouts/:id returns null exercise_log for SCHEDULED workout', async () => {
+    const assign = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: TODAY })
+    const scheduledId = assign.body.data.id
+
+    const res = await request(app)
+      .get(`/api/v1/client/workouts/${scheduledId}`)
+      .set('Authorization', `Bearer ${clientToken}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.status).toBe('SCHEDULED')
+    expect(res.body.data.exercises[0].exercise_log).toBeUndefined()
+  })
+
+  test('TC-LOG-007 · Re-submit with exercise_logs replaces prior logged values', async () => {
+    // Assign a fresh workout to use for edit tests
+    const assign = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: YESTERDAY })
+    const editWorkoutId = assign.body.data.id
+    const { rows: we } = await testPool.query('SELECT id FROM workout_exercises WHERE workout_id=$1', [editWorkoutId])
+
+    // First log: 3 sets @ 100kg
+    await request(app)
+      .post(`/api/v1/client/workouts/${editWorkoutId}/log`)
+      .set('Authorization', `Bearer ${clientToken}`)
+      .send({
+        exercise_logs: [{
+          workout_exercise_id: we[0].id,
+          actual_sets: 3,
+          sets: [
+            { set_index: 0, reps: 10, weight: 100 },
+            { set_index: 1, reps: 10, weight: 100 },
+            { set_index: 2, reps: 10, weight: 100 },
+          ],
+        }],
+      })
+
+    // Re-submit: 2 sets @ 120kg (different values)
+    const res = await request(app)
+      .post(`/api/v1/client/workouts/${editWorkoutId}/log`)
+      .set('Authorization', `Bearer ${clientToken}`)
+      .send({
+        exercise_logs: [{
+          workout_exercise_id: we[0].id,
+          actual_sets: 2,
+          sets: [
+            { set_index: 0, reps: 8, weight: 120 },
+            { set_index: 1, reps: 7, weight: 120 },
+          ],
+        }],
+      })
+    expect(res.status).toBe(201)
+
+    // Only ONE exercise_log row should exist (replaced, not appended)
+    const { rows: wl } = await testPool.query('SELECT id FROM workout_logs WHERE workout_id=$1', [editWorkoutId])
+    const { rows: el } = await testPool.query('SELECT * FROM exercise_logs WHERE workout_log_id=$1', [wl[0].id])
+    expect(el).toHaveLength(1)
+    expect(el[0].actual_sets).toBe(2)
+
+    // Set logs reflect the new submission
+    const { rows: sl } = await testPool.query(
+      'SELECT * FROM exercise_set_logs WHERE exercise_log_id=$1 ORDER BY set_index', [el[0].id]
+    )
+    expect(sl).toHaveLength(2)
+    expect(Number(sl[0].weight)).toBe(120)
+    expect(Number(sl[1].reps)).toBe(7)
+  })
+
+  test('TC-LOG-008 · GET after edit returns updated set values', async () => {
+    // Uses the editWorkoutId from TC-LOG-007 — assign a duplicate here since scope is lost
+    // Instead verify via the main workoutId after a re-submit with new values
+    const assign = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: YESTERDAY })
+    const fetchEditId = assign.body.data.id
+    const { rows: we } = await testPool.query('SELECT id FROM workout_exercises WHERE workout_id=$1', [fetchEditId])
+
+    // Initial log
+    await request(app)
+      .post(`/api/v1/client/workouts/${fetchEditId}/log`)
+      .set('Authorization', `Bearer ${clientToken}`)
+      .send({ exercise_logs: [{ workout_exercise_id: we[0].id, sets: [{ set_index: 0, reps: 5, weight: 50 }] }] })
+
+    // Edit with new values
+    await request(app)
+      .post(`/api/v1/client/workouts/${fetchEditId}/log`)
+      .set('Authorization', `Bearer ${clientToken}`)
+      .send({ exercise_logs: [{ workout_exercise_id: we[0].id, notes: 'felt easy', sets: [{ set_index: 0, reps: 10, weight: 80 }] }] })
+
+    // Fetch the workout — exercise_log should show updated values
+    const res = await request(app)
+      .get(`/api/v1/client/workouts/${fetchEditId}`)
+      .set('Authorization', `Bearer ${clientToken}`)
+
+    expect(res.status).toBe(200)
+    const log = res.body.data.exercises[0].exercise_log
+    expect(log).not.toBeNull()
+    expect(log.notes).toBe('felt easy')
+    expect(log.sets).toHaveLength(1)
+    expect(Number(log.sets[0].reps)).toBe(10)
+    expect(Number(log.sets[0].weight)).toBe(80)
+  })
+
+  test('TC-LOG-009 · GET /client/workouts/:id for another client\'s workout returns 404', async () => {
+    const res = await request(app)
+      .get(`/api/v1/client/workouts/00000000-0000-4000-8000-000000000002`)
+      .set('Authorization', `Bearer ${clientToken}`)
     expect(res.status).toBe(404)
   })
 

@@ -28,7 +28,7 @@ function SetRow({ set, index, onChange }) {
   )
 }
 
-function ExercisePanel({ ex, logs, onChange }) {
+function ExercisePanel({ ex, sets, notes, onSetChange, onNotesChange }) {
   const [open, setOpen] = useState(true)
 
   return (
@@ -56,9 +56,16 @@ function ExercisePanel({ ex, logs, onChange }) {
           <div className="grid grid-cols-3 gap-2 text-xs text-gray-400 font-medium text-center mb-1">
             <span>Set</span><span>Weight</span><span>Reps</span>
           </div>
-          {logs.map((set, i) => (
-            <SetRow key={i} set={set} index={i} onChange={onChange} />
+          {sets.map((set, i) => (
+            <SetRow key={i} set={set} index={i} onChange={onSetChange} />
           ))}
+          <textarea
+            value={notes}
+            onChange={e => onNotesChange(e.target.value)}
+            placeholder="Notes for this exercise…"
+            rows={2}
+            className="input w-full text-sm resize-none mt-2"
+          />
         </div>
       )}
     </div>
@@ -70,21 +77,28 @@ export default function WorkoutLogPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
 
-  // Fetch the specific workout directly — don't scan the full list
   const { data: workout, isLoading } = useQuery({
     queryKey: ['workout', id],
-    queryFn: async () => {
-      const res = await clientApi.listWorkouts()
-      return res.data.data.find(w => w.id === id) ?? null
-    },
+    queryFn: () => clientApi.getWorkout(id).then(r => r.data.data),
   })
 
   const initLogs = useCallback((exercises) => {
     const state = {}
     exercises?.forEach(ex => {
-      // Default to prescribed_sets rows; fall back to 3 if null/undefined
-      const rows = ex.prescribed_sets ?? 3
-      state[ex.id] = Array.from({ length: rows }, () => ({ reps: '', weight: '' }))
+      const log = ex.exercise_log
+      if (log?.sets?.length) {
+        // Pre-populate from previously logged set data
+        state[ex.id] = {
+          sets: log.sets.map(s => ({ reps: String(s.reps ?? ''), weight: String(s.weight ?? '') })),
+          notes: log.notes ?? '',
+        }
+      } else {
+        const rows = ex.prescribed_sets ?? 3
+        state[ex.id] = {
+          sets: Array.from({ length: rows }, () => ({ reps: '', weight: '' })),
+          notes: '',
+        }
+      }
     })
     return state
   }, [])
@@ -103,12 +117,13 @@ export default function WorkoutLogPage() {
     mutationFn: () => {
       // Build exercise_logs — workout_exercise_id is ex.id (the workout_exercises row id)
       const exercise_logs = (workout.exercises || []).map(ex => {
-        const sets = logState[ex.id] || []
+        const { sets = [], notes = '' } = logState[ex.id] || {}
         return {
           workout_exercise_id: ex.id,
           actual_sets:   sets.filter(s => s.reps || s.weight).length || null,
           actual_reps:   sets.map(s => s.reps).filter(Boolean).join(',') || null,
           actual_weight: sets.map(s => s.weight).filter(Boolean).join(',') || null,
+          notes:         notes.trim() || null,
         }
       })
       return clientApi.logWorkout(id, { exercise_logs })
@@ -129,7 +144,14 @@ export default function WorkoutLogPage() {
     setSubmitError('')
     setLogState(prev => ({
       ...prev,
-      [exId]: prev[exId].map((s, i) => i === setIndex ? { ...s, [key]: val } : s),
+      [exId]: { ...prev[exId], sets: prev[exId].sets.map((s, i) => i === setIndex ? { ...s, [key]: val } : s) },
+    }))
+  }
+
+  const updateNotes = (exId, val) => {
+    setLogState(prev => ({
+      ...prev,
+      [exId]: { ...prev[exId], notes: val },
     }))
   }
 
@@ -145,13 +167,19 @@ export default function WorkoutLogPage() {
     <div className="p-6 text-center text-gray-400">Workout not found.</div>
   )
 
+  const isEdit = workout?.status === 'COMPLETED'
+
   if (done) return (
     <div className="max-w-lg mx-auto px-4 py-16 text-center">
       <CheckCircle2 size={64} className="mx-auto mb-4 text-green-500" />
-      <h2 className="text-2xl font-bold text-gray-900 mb-2">Workout Complete!</h2>
-      <p className="text-gray-500 mb-6">Great work. Your session has been logged.</p>
-      <button onClick={() => navigate('/client/today')} className="btn-primary px-8">
-        Back to Home
+      <h2 className="text-2xl font-bold text-gray-900 mb-2">
+        {isEdit ? 'Workout Updated!' : 'Workout Complete!'}
+      </h2>
+      <p className="text-gray-500 mb-6">
+        {isEdit ? 'Your changes have been saved.' : 'Great work. Your session has been logged.'}
+      </p>
+      <button onClick={() => navigate('/client/history')} className="btn-primary px-8">
+        Back to History
       </button>
     </div>
   )
@@ -172,8 +200,10 @@ export default function WorkoutLogPage() {
           <ExercisePanel
             key={ex.id}
             ex={ex}
-            logs={logState[ex.id] || []}
-            onChange={(setIndex, key, val) => updateSet(ex.id, setIndex, key, val)}
+            sets={logState[ex.id]?.sets || []}
+            notes={logState[ex.id]?.notes || ''}
+            onSetChange={(setIndex, key, val) => updateSet(ex.id, setIndex, key, val)}
+            onNotesChange={val => updateNotes(ex.id, val)}
           />
         ))}
       </div>
@@ -187,7 +217,7 @@ export default function WorkoutLogPage() {
         disabled={isPending}
         className="btn-primary w-full py-3.5 text-base"
       >
-        {isPending ? 'Saving…' : 'Complete Workout'}
+        {isPending ? 'Saving…' : isEdit ? 'Update Workout' : 'Complete Workout'}
       </button>
     </div>
   )

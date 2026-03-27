@@ -113,10 +113,60 @@ router.get('/workouts', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// ─── GET /client/workouts/:workoutId ─────────────────────────────────────────
+// Returns a single workout with exercises. For COMPLETED workouts, each exercise
+// also carries an `exercise_log` object with the client's logged sets and notes.
+router.get('/workouts/:workoutId', async (req, res, next) => {
+  try {
+    const idParsed = uuidSchema.safeParse(req.params.workoutId)
+    if (!idParsed.success) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Workout not found' } })
+
+    const clientId = await getClientProfileId(req.user.id)
+    const { rows: wRows } = await query(
+      'SELECT * FROM workouts WHERE id=$1 AND client_id=$2',
+      [idParsed.data, clientId]
+    )
+    if (!wRows.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Workout not found' } })
+
+    const [workout] = await attachExercises(wRows)
+
+    if (workout.status === 'COMPLETED') {
+      const { rows: logRows } = await query(
+        'SELECT * FROM workout_logs WHERE workout_id=$1',
+        [idParsed.data]
+      )
+      if (logRows.length) {
+        const { rows: elRows } = await query(
+          `SELECT el.*,
+              COALESCE(
+                json_agg(
+                  json_build_object('set_index', esl.set_index, 'reps', esl.reps, 'weight', esl.weight)
+                  ORDER BY esl.set_index
+                ) FILTER (WHERE esl.id IS NOT NULL),
+                '[]'::json
+              ) AS sets
+           FROM exercise_logs el
+           LEFT JOIN exercise_set_logs esl ON esl.exercise_log_id = el.id
+           WHERE el.workout_log_id = $1
+           GROUP BY el.id`,
+          [logRows[0].id]
+        )
+        const logByExercise = {}
+        for (const el of elRows) logByExercise[el.workout_exercise_id] = el
+        workout.exercises = workout.exercises.map(ex => ({
+          ...ex,
+          exercise_log: logByExercise[ex.id] ?? null,
+        }))
+      }
+    }
+
+    res.json({ data: workout })
+  } catch (err) { next(err) }
+})
+
 // ─── POST /client/workouts/:workoutId/log ─────────────────────────────────────
-// Idempotent at the workout_log level (ON CONFLICT on workout_id).
-// Each call inserts new exercise_logs + set_logs; caller controls what is sent.
-// Pass exercise_logs: [] to update only workout-level fields without adding sets.
+// Idempotent: upserts the workout_log row and replaces all exercise_logs.
+// Re-submitting fully replaces prior logged values — not an append.
 router.post('/workouts/:workoutId/log', async (req, res, next) => {
   try {
     const idParsed = uuidSchema.safeParse(req.params.workoutId)
@@ -165,6 +215,14 @@ router.post('/workouts/:workoutId/log', async (req, res, next) => {
         [idParsed.data, clientId, overall_notes ?? null, rating ?? null]
       )
       const workoutLog = logRows[0]
+
+      // When exercise_logs are provided, replace all existing ones so re-submission
+      // is a full overwrite (not an append). Passing exercise_logs: [] skips this
+      // to allow updating only workout-level fields (overall_notes, rating).
+      // exercise_set_logs cascade-delete automatically via FK ON DELETE CASCADE.
+      if (exercise_logs.length > 0) {
+        await client.query('DELETE FROM exercise_logs WHERE workout_log_id=$1', [workoutLog.id])
+      }
 
       for (const el of exercise_logs) {
         const { rows: elRows } = await client.query(

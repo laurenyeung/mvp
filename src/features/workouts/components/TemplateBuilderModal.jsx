@@ -104,7 +104,7 @@ export default function TemplateBuilderModal({ template, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl w-full max-w-lg border border-pixel-border max-h-[90vh] flex flex-col shadow-card-hover">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-pixel-border shrink-0">
