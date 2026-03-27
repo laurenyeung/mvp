@@ -53,12 +53,22 @@ function ExercisePanel({ ex, sets, notes, onSetChange, onNotesChange }) {
 
       {open && (
         <div className="px-4 pb-4 space-y-2">
-          <div className="grid grid-cols-3 gap-2 text-xs text-gray-400 font-medium text-center mb-1">
-            <span>Set</span><span>Weight</span><span>Reps</span>
-          </div>
-          {sets.map((set, i) => (
-            <SetRow key={i} set={set} index={i} onChange={onSetChange} />
-          ))}
+          {ex.notes && (
+            <div className="bg-gray-50 rounded-lg px-3 py-2">
+              <p className="text-xs font-medium text-gray-400 mb-0.5">Coach's Notes</p>
+              <p className="text-xs text-gray-600">{ex.notes}</p>
+            </div>
+          )}
+          {sets.length > 0 && (
+            <>
+              <div className="grid grid-cols-3 gap-2 text-xs text-gray-400 font-medium text-center mb-1">
+                <span>Set</span><span>Weight</span><span>Reps</span>
+              </div>
+              {sets.map((set, i) => (
+                <SetRow key={i} set={set} index={i} onChange={onSetChange} />
+              ))}
+            </>
+          )}
           <textarea
             value={notes}
             onChange={e => onNotesChange(e.target.value)}
@@ -86,18 +96,11 @@ export default function WorkoutLogPage() {
     const state = {}
     exercises?.forEach(ex => {
       const log = ex.exercise_log
-      if (log?.sets?.length) {
-        // Pre-populate from previously logged set data
-        state[ex.id] = {
-          sets: log.sets.map(s => ({ reps: String(s.reps ?? ''), weight: String(s.weight ?? '') })),
-          notes: log.notes ?? '',
-        }
-      } else {
-        const rows = ex.prescribed_sets ?? 3
-        state[ex.id] = {
-          sets: Array.from({ length: rows }, () => ({ reps: '', weight: '' })),
-          notes: '',
-        }
+      state[ex.id] = {
+        sets: log?.sets?.length
+          ? log.sets.map(s => ({ reps: String(s.reps ?? ''), weight: String(s.weight ?? '') }))
+          : Array.from({ length: ex.prescribed_sets ?? 0 }, () => ({ reps: '', weight: '' })),
+        notes: log?.notes ?? '',
       }
     })
     return state
@@ -118,12 +121,18 @@ export default function WorkoutLogPage() {
       // Build exercise_logs — workout_exercise_id is ex.id (the workout_exercises row id)
       const exercise_logs = (workout.exercises || []).map(ex => {
         const { sets = [], notes = '' } = logState[ex.id] || {}
+        const filledSets = sets.filter(s => s.reps || s.weight)
         return {
           workout_exercise_id: ex.id,
-          actual_sets:   sets.filter(s => s.reps || s.weight).length || null,
-          actual_reps:   sets.map(s => s.reps).filter(Boolean).join(',') || null,
-          actual_weight: sets.map(s => s.weight).filter(Boolean).join(',') || null,
+          actual_sets:   filledSets.length || null,
+          actual_reps:   filledSets.map(s => s.reps).filter(Boolean).join(',') || null,
+          actual_weight: filledSets.map(s => s.weight).filter(Boolean).join(',') || null,
           notes:         notes.trim() || null,
+          sets:          filledSets.map((s, i) => ({
+            set_index: i,
+            reps:   Number(s.reps)   || null,
+            weight: Number(s.weight) || null,
+          })),
         }
       })
       return clientApi.logWorkout(id, { exercise_logs })

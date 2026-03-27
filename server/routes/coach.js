@@ -34,7 +34,8 @@ router.get('/templates', async (req, res, next) => {
              json_build_object(
                'id', wte.id, 'exercise_id', wte.exercise_id, 'name', e.name,
                'order_index', wte.order_index, 'prescribed_sets', wte.prescribed_sets,
-               'prescribed_reps', wte.prescribed_reps, 'prescribed_rest_secs', wte.prescribed_rest_secs
+               'prescribed_reps', wte.prescribed_reps, 'prescribed_rest_secs', wte.prescribed_rest_secs,
+               'notes', wte.notes
              ) ORDER BY wte.order_index
            ) FILTER (WHERE wte.id IS NOT NULL), '[]'
          ) AS exercises
