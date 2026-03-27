@@ -44,6 +44,7 @@ function ExercisePanel({ ex, sets, notes, onSetChange, onNotesChange }) {
             {ex.prescribed_sets && ex.prescribed_reps ? ' × ' : ''}
             {ex.prescribed_reps || ''}
             {ex.prescribed_weight ? ` @ ${ex.prescribed_weight}` : ''}
+            {ex.prescribed_rest_secs ? ` · ${ex.prescribed_rest_secs}s rest` : ''}
           </p>
         </div>
         {open
