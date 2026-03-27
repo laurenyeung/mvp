@@ -15,7 +15,7 @@ export default function WorkoutHistoryPage() {
   const navigate = useNavigate()
   const { data: workouts, isLoading, isError } = useQuery({
     queryKey: ['workouts-history'],
-    queryFn: () => clientApi.listWorkouts().then(r => r.data.data),
+    queryFn: () => clientApi.pastWorkouts().then(r => r.data.data),
   })
 
   return (

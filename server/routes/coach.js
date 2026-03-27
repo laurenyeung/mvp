@@ -8,6 +8,7 @@ import {
   updateWorkoutSchema,
   uuidSchema,
   commentSchema,
+  safeStr,
 } from '../middleware/validate.js'
 import { z } from 'zod'
 
@@ -402,17 +403,34 @@ router.post('/workouts/assign', async (req, res, next) => {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0].message } })
     }
     const coachId = await getCoachProfileId(req.user.id)
-    const { template_id, client_id, scheduled_date, name } = parsed.data
+    const { template_id, client_id, scheduled_date, name, exercises: exerciseOverrides } = parsed.data
 
     const { rows: tmpl } = await query(
       'SELECT * FROM workout_templates WHERE id=$1 AND coach_id=$2 AND is_archived=false', [template_id, coachId]
     )
     if (!tmpl.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Template not found' } })
 
-    const { rows: tmplExercises } = await query(
-      'SELECT * FROM workout_template_exercises WHERE workout_template_id=$1 ORDER BY order_index',
-      [template_id]
-    )
+    // Use coach-provided overrides if supplied, otherwise fall back to template defaults
+    let exercisesToInsert
+    if (exerciseOverrides && exerciseOverrides.length > 0) {
+      exercisesToInsert = exerciseOverrides.map((ex, i) => ({
+        exercise_id: ex.exercise_id,
+        order_index: ex.order_index ?? i,
+        superset_group: null,
+        prescribed_sets: ex.prescribed_sets ?? null,
+        prescribed_reps: ex.prescribed_reps ?? null,
+        prescribed_weight: ex.prescribed_weight ?? null,
+        prescribed_tempo: ex.prescribed_tempo ?? null,
+        prescribed_rest_secs: ex.prescribed_rest_secs ?? null,
+        notes: ex.notes ?? null,
+      }))
+    } else {
+      const { rows: tmplExercises } = await query(
+        'SELECT * FROM workout_template_exercises WHERE workout_template_id=$1 ORDER BY order_index',
+        [template_id]
+      )
+      exercisesToInsert = tmplExercises
+    }
 
     const { rows: clientUser } = await query(
       'SELECT user_id FROM client_profiles WHERE id=$1', [client_id]
@@ -428,7 +446,7 @@ router.post('/workouts/assign', async (req, res, next) => {
       )
       const w = rows[0]
 
-      for (const ex of tmplExercises) {
+      for (const ex of exercisesToInsert) {
         await client.query(
           `INSERT INTO workout_exercises
              (workout_id, exercise_id, order_index, superset_group, prescribed_sets,
@@ -454,11 +472,11 @@ router.post('/workouts/assign', async (req, res, next) => {
 // ── PATCH /coach/workout-exercises/:id ───────────────────────────────────────
 const updateWorkoutExerciseSchema = z.object({
   prescribed_sets:      z.number().int().min(1).max(20).optional(),
-  prescribed_reps:      z.string().max(50).optional(),
-  prescribed_weight:    z.string().max(50).optional(),
-  prescribed_tempo:     z.string().max(20).optional(),
+  prescribed_reps:      safeStr(50).nullable().optional(),
+  prescribed_weight:    safeStr(50).optional(),
+  prescribed_tempo:     safeStr(20).optional(),
   prescribed_rest_secs: z.number().int().min(0).max(600).optional(),
-  notes:                z.string().max(500).optional(),
+  notes:                safeStr(500).nullable().optional(),
 })
 
 router.patch('/workout-exercises/:id', async (req, res, next) => {

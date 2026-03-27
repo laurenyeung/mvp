@@ -560,6 +560,35 @@ describe('Section 4 — Workout Assignment', () => {
       })
     expect(res.status).toBe(404)
   })
+
+  test('TC-ASSIGN-005 · Exercise overrides in assign payload override template defaults', async () => {
+    const res = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({
+        template_id: templateId,
+        client_id: clientProfileId,
+        scheduled_date: TOMORROW,
+        name: 'Custom Override',
+        exercises: [{
+          exercise_id: exerciseId,
+          order_index: 0,
+          prescribed_sets: 7,
+          prescribed_reps: '12',
+          notes: 'Custom coach note',
+        }],
+      })
+
+    expect(res.status).toBe(201)
+    const { rows: we } = await testPool.query(
+      'SELECT * FROM workout_exercises WHERE workout_id=$1', [res.body.data.id]
+    )
+    // Only the one override exercise should be present (not the template's exercises)
+    expect(we).toHaveLength(1)
+    expect(we[0].prescribed_sets).toBe(7)
+    expect(we[0].prescribed_reps).toBe('12')
+    expect(we[0].notes).toBe('Custom coach note')
+  })
 })
 
 // =============================================================================

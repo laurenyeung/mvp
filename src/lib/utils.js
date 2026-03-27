@@ -7,7 +7,11 @@ export function cn(...inputs) {
 
 export function formatDate(dateStr) {
   if (!dateStr) return ''
-  return new Date(dateStr).toLocaleDateString('en-US', {
+  // Parse as local date — splitting avoids new Date('YYYY-MM-DD') treating the
+  // string as UTC midnight, which shifts the displayed date back one day in
+  // timezones west of UTC.
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
   })
 }

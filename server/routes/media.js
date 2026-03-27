@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { query } from '../db/pool.js'
 import { requireAuth } from '../middleware/auth.js'
 import { mediaLimiter } from '../middleware/rateLimiter.js'
 import { presignSchema } from '../middleware/validate.js'
@@ -48,13 +49,22 @@ router.post('/presign', mediaLimiter, async (req, res, next) => {
 })
 
 // GET /media/:s3Key/signed-url
-router.get('/:s3Key/signed-url', async (req, res, next) => {
+router.get('/:s3Key/signed-url', mediaLimiter, async (req, res, next) => {
   try {
     const key = decodeURIComponent(req.params.s3Key)
 
     // Prevent path traversal — reject any key with ../ sequences or absolute paths
     if (key.includes('..') || key.startsWith('/')) {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid key' } })
+    }
+
+    // Ownership check — only return a signed URL for keys this user uploaded
+    const { rows } = await query(
+      'SELECT id FROM media_uploads WHERE s3_key=$1 AND uploaded_by=$2',
+      [key, req.user.id]
+    )
+    if (!rows.length) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Not found' } })
     }
 
     // ── Production ────────────────────────────────────────────────────────────

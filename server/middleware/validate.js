@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 // Safe string: trims, enforces max length, rejects control characters.
-const safeStr = (max = 255) =>
+export const safeStr = (max = 255) =>
   z.string().trim()
     .max(max, `Must be ${max} characters or fewer`)
     .refine(s => !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(s), 'Invalid characters')
@@ -51,8 +51,8 @@ const prescribedExerciseSchema = z.object({
   order_index:          z.number().int().min(0).max(200).optional(),
   prescribed_sets:      z.number().int().min(1).max(20).nullable().optional(),
   prescribed_reps:      safeStr(50).nullable().optional(),
-  prescribed_weight:    safeStr(50).optional(),
-  prescribed_tempo:     safeStr(20).optional(),
+  prescribed_weight:    safeStr(50).nullable().optional(),
+  prescribed_tempo:     safeStr(20).nullable().optional(),
   prescribed_rest_secs: z.number().int().min(0).max(600).nullable().optional(),
   notes:                safeStr(500).nullable().optional(),
 })
@@ -73,6 +73,7 @@ export const assignWorkoutSchema = z.object({
   client_id:      uuidSchema,
   scheduled_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD'),
   name:           safeStr(200).optional(),
+  exercises:      z.array(prescribedExerciseSchema).max(50).optional(),
 })
 
 export const updateWorkoutSchema = z.object({

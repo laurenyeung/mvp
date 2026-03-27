@@ -10,7 +10,7 @@ const coachNav = [
 ]
 
 const clientNav = [
-  { to: '/client/today', icon: Calendar, label: 'Today' },
+  { to: '/client/today', icon: Calendar, label: 'Upcoming' },
   { to: '/client/history', icon: History, label: 'History' },
   { to: '/client/progress', icon: TrendingUp, label: 'Progress' },
   { to: '/exercises', icon: Dumbbell, label: 'Exercises' },
