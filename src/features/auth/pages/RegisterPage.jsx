@@ -79,7 +79,7 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
               <div>
                 <label className="label">First Name</label>
                 <input {...register('first_name')} className="input" placeholder="Alex" />

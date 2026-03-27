@@ -159,6 +159,13 @@ This file is updated after every user correction. Each entry captures the mistak
 
 ---
 
+### 2026-03-27 — Committing to git without being asked
+**What happened:** After fixing a bug, automatically ran `git commit` and `git push` without the user requesting it.
+**Root cause:** Treated "task complete" as equivalent to "commit and push". These are separate decisions.
+**Rule:** Never run `git commit` or `git push` unless the user explicitly says so (e.g. "push to git", "commit this"). Stop at the code change and wait.
+
+---
+
 ### 2026-03-23 — Cross-workout exercise_id in log endpoint allowed silently (data corruption)
 **What happened:** TC-WLOG-003 submitted a `workout_exercise_id` belonging to a different workout. The log was accepted (201) because the FK only validates existence, not ownership. The resulting `exercise_log` row had a cross-workout reference — silent data corruption.
 **Root cause:** No validation that submitted `workout_exercise_id`s belong to the target workout. FK constraints only enforce existence, not scope.

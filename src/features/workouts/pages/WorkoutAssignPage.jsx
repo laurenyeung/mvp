@@ -30,6 +30,15 @@ function ExerciseSlot({ ex, index, onChange, onRemove }) {
           </div>
         ))}
       </div>
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={ex.log_weight ?? false}
+          onChange={e => onChange(index, 'log_weight', e.target.checked)}
+          className="w-4 h-4 accent-pixel-accent"
+        />
+        <span className="text-xs text-gray-600">Log weight for this exercise</span>
+      </label>
       <input
         value={ex.notes ?? ''}
         onChange={e => onChange(index, 'notes', e.target.value)}
@@ -77,6 +86,7 @@ export default function WorkoutAssignPage() {
         prescribed_weight: ex.prescribed_weight ?? '',
         prescribed_tempo: ex.prescribed_tempo ?? '',
         notes: ex.notes ?? '',
+        log_weight: false,
       })))
     } else {
       setExercises([])
@@ -107,6 +117,7 @@ export default function WorkoutAssignPage() {
           prescribed_weight: ex.prescribed_weight || null,
           prescribed_tempo: ex.prescribed_tempo || null,
           notes: ex.notes || null,
+          log_weight: ex.log_weight ?? false,
         })),
       }
       return coachApi.assignWorkout(payload)

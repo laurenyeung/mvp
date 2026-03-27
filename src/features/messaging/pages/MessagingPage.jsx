@@ -160,7 +160,7 @@ export default function MessagingPage() {
   const showThread = activeThread !== null
 
   return (
-    <div className="h-[calc(100vh-4rem)] md:h-screen flex max-w-4xl mx-auto">
+    <div className="flex-1 min-h-0 flex max-w-4xl w-full mx-auto">
       {/* Thread list */}
       <div className={cn(
         'md:w-72 md:border-r-2 border-pixel-border flex flex-col bg-pixel-surface',

@@ -4,24 +4,26 @@ import { useState, useCallback } from 'react'
 import { CheckCircle2, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react'
 import { clientApi } from '@/lib/api'
 
-function SetRow({ set, index, onChange }) {
+function SetRow({ set, index, onChange, showWeight }) {
   return (
-    <div className="grid grid-cols-3 gap-2 items-center">
+    <div className={`grid gap-2 items-center ${showWeight ? 'grid-cols-3' : 'grid-cols-2'}`}>
       <span className="text-center text-sm font-medium text-gray-500">{index + 1}</span>
+      {showWeight && (
+        <input
+          value={set.weight ?? ''}
+          onChange={e => onChange(index, 'weight', e.target.value)}
+          placeholder="kg"
+          className="input text-center text-sm py-2"
+          type="text"
+          inputMode="decimal"
+        />
+      )}
       <input
-        value={set.weight || ''}
-        onChange={e => onChange(index, 'weight', e.target.value)}
-        placeholder="kg"
-        className="input text-center text-sm py-2"
-        type="number"
-        inputMode="decimal"
-      />
-      <input
-        value={set.reps || ''}
+        value={set.reps ?? ''}
         onChange={e => onChange(index, 'reps', e.target.value)}
         placeholder="reps"
         className="input text-center text-sm py-2"
-        type="number"
+        type="text"
         inputMode="numeric"
       />
     </div>
@@ -30,6 +32,7 @@ function SetRow({ set, index, onChange }) {
 
 function ExercisePanel({ ex, sets, notes, onSetChange, onNotesChange }) {
   const [open, setOpen] = useState(true)
+  const showWeight = !!ex.log_weight
 
   return (
     <div className="card overflow-hidden">
@@ -62,11 +65,13 @@ function ExercisePanel({ ex, sets, notes, onSetChange, onNotesChange }) {
           )}
           {sets.length > 0 && (
             <>
-              <div className="grid grid-cols-3 gap-2 text-xs text-gray-400 font-medium text-center mb-1">
-                <span>Set</span><span>Weight</span><span>Reps</span>
+              <div className={`grid gap-2 text-xs text-gray-400 font-medium text-center mb-1 ${showWeight ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                <span>Set</span>
+                {showWeight && <span>Weight</span>}
+                <span>Reps</span>
               </div>
               {sets.map((set, i) => (
-                <SetRow key={i} set={set} index={i} onChange={onSetChange} />
+                <SetRow key={i} set={set} index={i} onChange={onSetChange} showWeight={showWeight} />
               ))}
             </>
           )}
@@ -131,8 +136,8 @@ export default function WorkoutLogPage() {
           notes:         notes.trim() || null,
           sets:          filledSets.map((s, i) => ({
             set_index: i,
-            reps:   Number(s.reps)   || null,
-            weight: Number(s.weight) || null,
+            reps:   s.reps   !== '' ? parseInt(s.reps,   10) : null,
+            weight: s.weight !== '' ? parseFloat(s.weight)   : null,
           })),
         }
       })

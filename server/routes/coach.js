@@ -423,6 +423,7 @@ router.post('/workouts/assign', async (req, res, next) => {
         prescribed_tempo: ex.prescribed_tempo ?? null,
         prescribed_rest_secs: ex.prescribed_rest_secs ?? null,
         notes: ex.notes ?? null,
+        log_weight: ex.log_weight ?? false,
       }))
     } else {
       const { rows: tmplExercises } = await query(
@@ -450,11 +451,11 @@ router.post('/workouts/assign', async (req, res, next) => {
         await client.query(
           `INSERT INTO workout_exercises
              (workout_id, exercise_id, order_index, superset_group, prescribed_sets,
-              prescribed_reps, prescribed_weight, prescribed_tempo, prescribed_rest_secs, notes)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+              prescribed_reps, prescribed_weight, prescribed_tempo, prescribed_rest_secs, notes, log_weight)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
           [w.id, ex.exercise_id, ex.order_index, ex.superset_group,
            ex.prescribed_sets, ex.prescribed_reps, ex.prescribed_weight,
-           ex.prescribed_tempo, ex.prescribed_rest_secs, ex.notes]
+           ex.prescribed_tempo, ex.prescribed_rest_secs, ex.notes, ex.log_weight ?? false]
         )
       }
 

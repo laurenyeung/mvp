@@ -588,6 +588,32 @@ describe('Section 4 — Workout Assignment', () => {
     expect(we[0].prescribed_sets).toBe(7)
     expect(we[0].prescribed_reps).toBe('12')
     expect(we[0].notes).toBe('Custom coach note')
+    expect(we[0].log_weight).toBe(false) // default when not set
+  })
+
+  test('TC-ASSIGN-006 · log_weight=true is stored on workout_exercises', async () => {
+    const res = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({
+        template_id: templateId,
+        client_id: clientProfileId,
+        scheduled_date: TOMORROW,
+        exercises: [{
+          exercise_id: exerciseId,
+          order_index: 0,
+          prescribed_sets: 3,
+          prescribed_reps: '10',
+          log_weight: true,
+        }],
+      })
+
+    expect(res.status).toBe(201)
+    const { rows: we } = await testPool.query(
+      'SELECT log_weight FROM workout_exercises WHERE workout_id=$1', [res.body.data.id]
+    )
+    expect(we).toHaveLength(1)
+    expect(we[0].log_weight).toBe(true)
   })
 })
 

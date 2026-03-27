@@ -164,6 +164,9 @@ ALTER TABLE workout_template_exercises ALTER COLUMN prescribed_sets DROP DEFAULT
 ALTER TABLE workout_exercises          ALTER COLUMN prescribed_sets DROP NOT NULL;
 ALTER TABLE workout_exercises          ALTER COLUMN prescribed_sets DROP DEFAULT;
 
+-- log_weight flag — coach controls whether client sees a weight column per exercise
+ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS log_weight BOOLEAN NOT NULL DEFAULT false;
+
 -- WORKOUT LOGS
 CREATE TABLE IF NOT EXISTS workout_logs (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),

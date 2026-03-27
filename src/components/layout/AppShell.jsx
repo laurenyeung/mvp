@@ -11,7 +11,7 @@ export default function AppShell() {
   return (
     <div className="flex h-screen overflow-hidden bg-pixel-bg">
       {!isMobile && <Sidebar role={user?.role} />}
-      <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+      <main className="flex-1 flex flex-col min-h-0 overflow-y-auto pb-safe md:pb-0">
         <Outlet />
       </main>
       {isMobile && <MobileNav role={user?.role} />}

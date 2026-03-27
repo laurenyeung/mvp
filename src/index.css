@@ -25,6 +25,24 @@
   ::-webkit-scrollbar-thumb:hover { background: #737373; }
 }
 
+@layer utilities {
+  /* Hide scrollbar while keeping scroll behaviour */
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* iPhone notch / home-bar safe area */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pb-safe {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 @layer components {
   /* ── Buttons ── */
   .btn {

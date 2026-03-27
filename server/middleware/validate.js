@@ -55,6 +55,7 @@ const prescribedExerciseSchema = z.object({
   prescribed_tempo:     safeStr(20).nullable().optional(),
   prescribed_rest_secs: z.number().int().min(0).max(600).nullable().optional(),
   notes:                safeStr(500).nullable().optional(),
+  log_weight:           z.boolean().optional().default(false),
 })
 
 export const createTemplateSchema = z.object({

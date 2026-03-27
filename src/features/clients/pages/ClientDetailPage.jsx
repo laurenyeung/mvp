@@ -114,9 +114,9 @@ export default function ClientDetailPage() {
                 {w.status === 'SCHEDULED' && (
                   <button
                     onClick={() => deleteWorkout(w.id)}
-                    className="text-gray-300 hover:text-red-400 p-1 transition-colors"
+                    className="text-gray-300 hover:text-red-400 p-2 transition-colors"
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={16} />
                   </button>
                 )}
               </div>
