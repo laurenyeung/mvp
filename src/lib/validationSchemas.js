@@ -18,6 +18,7 @@ export const exerciseSchema = z.object({
   description: z.string().optional(),
   equipment_required: z.array(z.string()).optional(),
   is_public: z.boolean().default(false),
+  youtube_url: z.string().optional(),
 })
 
 export const templateSchema = z.object({

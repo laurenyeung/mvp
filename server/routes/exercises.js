@@ -29,7 +29,7 @@ router.get('/', async (req, res, next) => {
     params.push(limit, offset)
 
     const { rows } = await query(
-      `SELECT id, name, description, equipment_required, is_public, created_by, created_at
+      `SELECT id, name, description, equipment_required, is_public, youtube_url, created_by, created_at
        FROM exercises
        WHERE ${where}
        ORDER BY name
@@ -62,13 +62,13 @@ router.post('/', requireRole('COACH', 'ADMIN'), async (req, res, next) => {
         error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0].message },
       })
     }
-    const { name, description, equipment_required, is_public } = parsed.data
+    const { name, description, equipment_required, is_public, youtube_url } = parsed.data
 
     const { rows } = await query(
       `INSERT INTO exercises
-         (name, description, equipment_required, created_by, is_public)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [name, description ?? null, equipment_required ?? [], req.user.id, is_public]
+         (name, description, equipment_required, created_by, is_public, youtube_url)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [name, description ?? null, equipment_required ?? [], req.user.id, is_public, youtube_url ?? null]
     )
     res.status(201).json({ data: rows[0] })
   } catch (err) { next(err) }
@@ -93,14 +93,15 @@ router.patch('/:id', requireRole('COACH', 'ADMIN'), async (req, res, next) => {
       return res.status(403).json({ error: { code: 'NOT_YOUR_RESOURCE', message: 'Forbidden' } })
     }
 
-    const { name, description, is_public } = parsed.data
+    const { name, description, is_public, youtube_url } = parsed.data
     const { rows } = await query(
       `UPDATE exercises
        SET name=COALESCE($1,name),
            description=COALESCE($2,description),
-           is_public=COALESCE($3,is_public)
-       WHERE id=$4 RETURNING *`,
-      [name ?? null, description ?? null, is_public ?? null, idParsed.data]
+           is_public=COALESCE($3,is_public),
+           youtube_url=COALESCE($4,youtube_url)
+       WHERE id=$5 RETURNING *`,
+      [name ?? null, description ?? null, is_public ?? null, youtube_url ?? null, idParsed.data]
     )
     res.json({ data: rows[0] })
   } catch (err) { next(err) }

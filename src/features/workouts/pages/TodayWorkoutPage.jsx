@@ -26,7 +26,7 @@ function WorkoutCard({ workout, navigate }) {
       </div>
 
       <div className="space-y-2 mb-4">
-        {workout.exercises?.slice(0, 4).map((ex, i) => (
+        {workout.exercises?.filter(ex => !ex.section || ex.section === 'MAIN').slice(0, 4).map((ex, i) => (
           <div key={ex.id} className="flex items-center gap-2 text-sm">
             <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 text-xs flex items-center justify-center font-medium shrink-0">
               {i + 1}
@@ -43,8 +43,8 @@ function WorkoutCard({ workout, navigate }) {
             )}
           </div>
         ))}
-        {workout.exercises?.length > 4 && (
-          <p className="text-xs text-gray-400 pl-7">+{workout.exercises.length - 4} more exercises</p>
+        {workout.exercises?.filter(ex => !ex.section || ex.section === 'MAIN').length > 4 && (
+          <p className="text-xs text-gray-400 pl-7">+{workout.exercises.filter(ex => !ex.section || ex.section === 'MAIN').length - 4} more exercises</p>
         )}
       </div>
 
@@ -94,11 +94,6 @@ export default function TodayWorkoutPage() {
 
   const isLoading = loadingToday || loadingFuture
 
-  // For today, prefer SCHEDULED; fall back to COMPLETED
-  const todayWorkout = todayWorkouts.find(w => w.status === 'SCHEDULED')
-    ?? todayWorkouts.find(w => w.status === 'COMPLETED')
-    ?? null
-
   return (
     <div className="max-w-lg mx-auto px-4 py-6">
       <div className="mb-6">
@@ -119,8 +114,12 @@ export default function TodayWorkoutPage() {
           {/* Today section */}
           <section>
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Today</h2>
-            {todayWorkout ? (
-              <WorkoutCard workout={todayWorkout} navigate={navigate} />
+            {todayWorkouts.length > 0 ? (
+              <div className="space-y-3">
+                {todayWorkouts.map(w => (
+                  <WorkoutCard key={w.id} workout={w} navigate={navigate} />
+                ))}
+              </div>
             ) : (
               <div className="card p-6 text-center">
                 <Calendar size={32} className="mx-auto mb-2 text-gray-300" />

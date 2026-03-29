@@ -40,6 +40,16 @@ export default function CreateExerciseModal({ onClose }) {
             <textarea {...register('description')} className="input min-h-[80px] resize-none" placeholder="Optional notes…" />
           </div>
 
+          <div>
+            <label className="label">YouTube Demo URL <span className="text-gray-400 font-normal">(optional)</span></label>
+            <input
+              {...register('youtube_url')}
+              className="input"
+              placeholder="https://youtube.com/shorts/…"
+            />
+            <p className="text-xs text-gray-400 mt-1">Paste a YouTube Short or video link — it will play as a looping demo on the exercise card.</p>
+          </div>
+
           <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
             <input {...register('is_public')} type="checkbox" className="rounded" />
             Make public (visible to all coaches)

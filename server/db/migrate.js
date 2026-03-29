@@ -167,6 +167,16 @@ ALTER TABLE workout_exercises          ALTER COLUMN prescribed_sets DROP DEFAULT
 -- log_weight flag — coach controls whether client sees a weight column per exercise
 ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS log_weight BOOLEAN NOT NULL DEFAULT false;
 
+-- log_bilateral flag — when true, each prescribed set is split into Left and Right rows in client view
+ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS log_bilateral BOOLEAN NOT NULL DEFAULT false;
+
+-- section — groups exercises into WARMUP / MAIN / COOLDOWN within a template or assigned workout
+ALTER TABLE workout_template_exercises ADD COLUMN IF NOT EXISTS section VARCHAR(20) NOT NULL DEFAULT 'MAIN';
+ALTER TABLE workout_exercises          ADD COLUMN IF NOT EXISTS section VARCHAR(20) NOT NULL DEFAULT 'MAIN';
+
+-- youtube_url — optional YouTube Short/video to show as a demo GIF on the exercise card
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS youtube_url VARCHAR(255);
+
 -- WORKOUT LOGS
 CREATE TABLE IF NOT EXISTS workout_logs (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),

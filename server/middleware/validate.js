@@ -41,6 +41,7 @@ export const createExerciseSchema = z.object({
   description:        safeStr(2000).optional(),
   equipment_required: z.array(safeStr(100)).max(20).optional(),
   is_public:          z.boolean().optional().default(false),
+  youtube_url:        safeStr(255).nullable().optional(),
 })
 
 export const updateExerciseSchema = createExerciseSchema.partial()
@@ -56,6 +57,8 @@ const prescribedExerciseSchema = z.object({
   prescribed_rest_secs: z.number().int().min(0).max(600).nullable().optional(),
   notes:                safeStr(500).nullable().optional(),
   log_weight:           z.boolean().optional().default(false),
+  log_bilateral:        z.boolean().optional().default(false),
+  section:              z.enum(['WARMUP', 'MAIN', 'COOLDOWN']).optional().default('MAIN'),
 })
 
 export const createTemplateSchema = z.object({

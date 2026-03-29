@@ -18,7 +18,6 @@ export default function LoginPage() {
 
   const onSubmit = async (data) => {
     setLoading(true)
-    setError('')
     try {
       const res = await authApi.login(data)
       const { user, token } = res.data.data

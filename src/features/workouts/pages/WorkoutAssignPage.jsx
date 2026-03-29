@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { ArrowLeft, Trash2 } from 'lucide-react'
 import { coachApi } from '@/lib/api'
 
-function ExerciseSlot({ ex, index, onChange, onRemove }) {
+// Full prescription slot for MAIN exercises
+function MainSlot({ ex, index, onChange, onRemove }) {
   return (
     <div className="card p-3 space-y-2">
       <div className="flex items-center gap-2">
@@ -15,9 +16,9 @@ function ExerciseSlot({ ex, index, onChange, onRemove }) {
       </div>
       <div className="grid grid-cols-3 gap-2">
         {[
-          { key: 'prescribed_sets', label: 'Sets', placeholder: '3' },
-          { key: 'prescribed_reps', label: 'Reps', placeholder: '10' },
-          { key: 'prescribed_rest_secs', label: 'Rest (s)', placeholder: '90' },
+          { key: 'prescribed_sets', label: 'Sets', placeholder: '0' },
+          { key: 'prescribed_reps', label: 'Reps', placeholder: '0' },
+          { key: 'prescribed_rest_secs', label: 'Rest (s)', placeholder: '0' },
         ].map(({ key, label, placeholder }) => (
           <div key={key}>
             <p className="text-xs text-gray-400 mb-1">{label}</p>
@@ -39,12 +40,62 @@ function ExerciseSlot({ ex, index, onChange, onRemove }) {
         />
         <span className="text-xs text-gray-600">Log weight for this exercise</span>
       </label>
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={ex.log_bilateral ?? false}
+          onChange={e => onChange(index, 'log_bilateral', e.target.checked)}
+          className="w-4 h-4 accent-pixel-accent"
+        />
+        <span className="text-xs text-gray-600">Log for left and right side</span>
+      </label>
       <input
         value={ex.notes ?? ''}
         onChange={e => onChange(index, 'notes', e.target.value)}
         placeholder="Coach notes for this exercise (optional)"
         className="input text-sm py-2"
       />
+    </div>
+  )
+}
+
+// Notes-only slot for WARMUP / COOLDOWN exercises
+function WarmCoolSlot({ ex, index, onChange, onRemove }) {
+  return (
+    <div className="card p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium text-gray-900 flex-1">{ex.name}</span>
+        <button onClick={() => onRemove(index)} className="text-gray-400 hover:text-red-500 p-1 shrink-0">
+          <Trash2 size={14} />
+        </button>
+      </div>
+      <input
+        value={ex.notes ?? ''}
+        onChange={e => onChange(index, 'notes', e.target.value)}
+        placeholder="Coach notes (optional)"
+        className="input text-sm py-2"
+      />
+    </div>
+  )
+}
+
+function SectionGroup({ label, section, exercises, onChange, onRemove }) {
+  const items = exercises
+    .map((ex, i) => ({ ex, i }))
+    .filter(({ ex }) => (ex.section || 'MAIN') === section)
+
+  if (items.length === 0) return null
+
+  return (
+    <div>
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{label}</p>
+      <div className="space-y-2">
+        {items.map(({ ex, i }) =>
+          section === 'MAIN'
+            ? <MainSlot key={i} ex={ex} index={i} onChange={onChange} onRemove={onRemove} />
+            : <WarmCoolSlot key={i} ex={ex} index={i} onChange={onChange} onRemove={onRemove} />
+        )}
+      </div>
     </div>
   )
 }
@@ -69,7 +120,6 @@ export default function WorkoutAssignPage() {
     queryFn: () => coachApi.getClient(clientId).then(r => r.data.data),
   })
 
-  // When a template is selected, seed exercises from its data (already in the list)
   useEffect(() => {
     if (!templateId || !templates) {
       setExercises([])
@@ -80,6 +130,7 @@ export default function WorkoutAssignPage() {
       setExercises(tmpl.exercises.map(ex => ({
         exercise_id: ex.exercise_id,
         name: ex.name,
+        section: ex.section || 'MAIN',
         prescribed_sets: ex.prescribed_sets ?? '',
         prescribed_reps: ex.prescribed_reps ?? '',
         prescribed_rest_secs: ex.prescribed_rest_secs ?? '',
@@ -87,6 +138,7 @@ export default function WorkoutAssignPage() {
         prescribed_tempo: ex.prescribed_tempo ?? '',
         notes: ex.notes ?? '',
         log_weight: false,
+        log_bilateral: false,
       })))
     } else {
       setExercises([])
@@ -109,6 +161,7 @@ export default function WorkoutAssignPage() {
         exercises: exercises.map((ex, i) => ({
           exercise_id: ex.exercise_id,
           order_index: i,
+          section: ex.section || 'MAIN',
           prescribed_sets: ex.prescribed_sets !== '' && ex.prescribed_sets != null
             ? Number(ex.prescribed_sets) : null,
           prescribed_reps: ex.prescribed_reps || null,
@@ -118,6 +171,7 @@ export default function WorkoutAssignPage() {
           prescribed_tempo: ex.prescribed_tempo || null,
           notes: ex.notes || null,
           log_weight: ex.log_weight ?? false,
+          log_bilateral: ex.log_bilateral ?? false,
         })),
       }
       return coachApi.assignWorkout(payload)
@@ -127,6 +181,11 @@ export default function WorkoutAssignPage() {
       navigate(`/coach/clients/${clientId}`)
     },
   })
+
+  const hasAny = exercises.length > 0
+  const hasWarmup   = exercises.some(ex => (ex.section || 'MAIN') === 'WARMUP')
+  const hasMain     = exercises.some(ex => (ex.section || 'MAIN') === 'MAIN')
+  const hasCooldown = exercises.some(ex => (ex.section || 'MAIN') === 'COOLDOWN')
 
   return (
     <div className="max-w-lg mx-auto px-4 py-6">
@@ -158,16 +217,14 @@ export default function WorkoutAssignPage() {
           </div>
         </div>
 
-        {exercises.length > 0 && (
-          <div>
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-              Exercises — customize before assigning
-            </h2>
-            <div className="space-y-2">
-              {exercises.map((ex, i) => (
-                <ExerciseSlot key={i} ex={ex} index={i} onChange={updateExercise} onRemove={removeExercise} />
-              ))}
-            </div>
+        {hasAny && (
+          <div className="space-y-4">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              Customize before assigning
+            </p>
+            {hasWarmup   && <SectionGroup label="Warm Up"    section="WARMUP"   exercises={exercises} onChange={updateExercise} onRemove={removeExercise} />}
+            {hasMain     && <SectionGroup label="Exercises"  section="MAIN"     exercises={exercises} onChange={updateExercise} onRemove={removeExercise} />}
+            {hasCooldown && <SectionGroup label="Cool Down"  section="COOLDOWN" exercises={exercises} onChange={updateExercise} onRemove={removeExercise} />}
           </div>
         )}
 

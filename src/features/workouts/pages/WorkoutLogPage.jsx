@@ -4,10 +4,10 @@ import { useState, useCallback } from 'react'
 import { CheckCircle2, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react'
 import { clientApi } from '@/lib/api'
 
-function SetRow({ set, index, onChange, showWeight }) {
+function SetRow({ set, index, onChange, showWeight, label }) {
   return (
     <div className={`grid gap-2 items-center ${showWeight ? 'grid-cols-3' : 'grid-cols-2'}`}>
-      <span className="text-center text-sm font-medium text-gray-500">{index + 1}</span>
+      <span className="text-center text-sm font-medium text-gray-500">{label ?? index + 1}</span>
       {showWeight && (
         <input
           value={set.weight ?? ''}
@@ -30,9 +30,74 @@ function SetRow({ set, index, onChange, showWeight }) {
   )
 }
 
-function ExercisePanel({ ex, sets, notes, onSetChange, onNotesChange }) {
+function getYouTubeId(url) {
+  if (!url) return null
+  const m = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+  return m ? m[1] : null
+}
+
+function WarmCoolCard({ ex }) {
   const [open, setOpen] = useState(true)
+  const [demoOpen, setDemoOpen] = useState(false)
+  const ytId = getYouTubeId(ex.youtube_url)
+
+  return (
+    <div className="card overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between p-4"
+      >
+        <p className="font-semibold text-gray-900 text-sm text-left">{ex.name}</p>
+        {open
+          ? <ChevronUp size={16} className="text-gray-400 shrink-0" />
+          : <ChevronDown size={16} className="text-gray-400 shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-2">
+          {ex.notes && (
+            <p className="text-xs text-gray-500">{ex.notes}</p>
+          )}
+          {ytId && (
+            <div>
+              <button
+                onClick={() => setDemoOpen(o => !o)}
+                className="flex items-center gap-1.5 text-xs font-medium text-brand-600 py-1"
+              >
+                {demoOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                Demo available
+              </button>
+              {demoOpen && (
+                <div className="flex justify-center mt-1">
+                  <div className="relative rounded-xl overflow-hidden bg-black" style={{ width: '160px', aspectRatio: '9/16' }}>
+                    <iframe
+                      src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&loop=1&playlist=${ytId}&mute=1&controls=0&playsinline=1&modestbranding=1&rel=0`}
+                      className="absolute inset-0 w-full h-full"
+                      allow="autoplay; encrypted-media"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function setLabel(index, bilateral) {
+  if (!bilateral) return index + 1
+  const setNum = Math.floor(index / 2) + 1
+  return `${setNum} ${index % 2 === 0 ? 'Left' : 'Right'}`
+}
+
+function ExercisePanel({ ex, sets, notes, onSetChange, onNotesChange, readOnly }) {
+  const [open, setOpen] = useState(true)
+  const [demoOpen, setDemoOpen] = useState(false)
   const showWeight = !!ex.log_weight
+  const ytId = getYouTubeId(ex.youtube_url)
 
   return (
     <div className="card overflow-hidden">
@@ -63,7 +128,32 @@ function ExercisePanel({ ex, sets, notes, onSetChange, onNotesChange }) {
               <p className="text-xs text-gray-600">{ex.notes}</p>
             </div>
           )}
-          {sets.length > 0 && (
+          {ytId && (
+            <div>
+              <button
+                onClick={() => setDemoOpen(o => !o)}
+                className="flex items-center gap-1.5 text-xs font-medium text-brand-600 py-1"
+              >
+                {demoOpen
+                  ? <ChevronUp size={13} />
+                  : <ChevronDown size={13} />}
+                Demo available
+              </button>
+              {demoOpen && (
+                <div className="flex justify-center mt-1">
+                  <div className="relative rounded-xl overflow-hidden bg-black" style={{ width: '160px', aspectRatio: '9/16' }}>
+                    <iframe
+                      src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&loop=1&playlist=${ytId}&mute=1&controls=0&playsinline=1&modestbranding=1&rel=0`}
+                      className="absolute inset-0 w-full h-full"
+                      allow="autoplay; encrypted-media"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {!readOnly && sets.length > 0 && (
             <>
               <div className={`grid gap-2 text-xs text-gray-400 font-medium text-center mb-1 ${showWeight ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <span>Set</span>
@@ -71,17 +161,19 @@ function ExercisePanel({ ex, sets, notes, onSetChange, onNotesChange }) {
                 <span>Reps</span>
               </div>
               {sets.map((set, i) => (
-                <SetRow key={i} set={set} index={i} onChange={onSetChange} showWeight={showWeight} />
+                <SetRow key={i} set={set} index={i} onChange={onSetChange} showWeight={showWeight} label={setLabel(i, ex.log_bilateral)} />
               ))}
             </>
           )}
-          <textarea
-            value={notes}
-            onChange={e => onNotesChange(e.target.value)}
-            placeholder="Notes for this exercise…"
-            rows={2}
-            className="input w-full text-sm resize-none mt-2"
-          />
+          {!readOnly && (
+            <textarea
+              value={notes}
+              onChange={e => onNotesChange(e.target.value)}
+              placeholder="Notes for this exercise…"
+              rows={2}
+              className="input w-full text-sm resize-none mt-2"
+            />
+          )}
         </div>
       )}
     </div>
@@ -101,11 +193,13 @@ export default function WorkoutLogPage() {
   const initLogs = useCallback((exercises) => {
     const state = {}
     exercises?.forEach(ex => {
+      if (ex.section === 'WARMUP' || ex.section === 'COOLDOWN') return
       const log = ex.exercise_log
+      const slotCount = (ex.prescribed_sets ?? 0) * (ex.log_bilateral ? 2 : 1)
       state[ex.id] = {
         sets: log?.sets?.length
           ? log.sets.map(s => ({ reps: String(s.reps ?? ''), weight: String(s.weight ?? '') }))
-          : Array.from({ length: ex.prescribed_sets ?? 0 }, () => ({ reps: '', weight: '' })),
+          : Array.from({ length: slotCount }, () => ({ reps: '', weight: '' })),
         notes: log?.notes ?? '',
       }
     })
@@ -124,8 +218,8 @@ export default function WorkoutLogPage() {
 
   const { mutate: submitLog, isPending } = useMutation({
     mutationFn: () => {
-      // Build exercise_logs — workout_exercise_id is ex.id (the workout_exercises row id)
-      const exercise_logs = (workout.exercises || []).map(ex => {
+      // Build exercise_logs — only MAIN exercises are logged (warmup/cooldown are informational)
+      const exercise_logs = (workout.exercises || []).filter(ex => !ex.section || ex.section === 'MAIN').map(ex => {
         const { sets = [], notes = '' } = logState[ex.id] || {}
         const filledSets = sets.filter(s => s.reps || s.weight)
         return {
@@ -182,6 +276,8 @@ export default function WorkoutLogPage() {
     <div className="p-6 text-center text-gray-400">Workout not found.</div>
   )
 
+  const today = new Date().toISOString().split('T')[0]
+  const isFuture = workout?.scheduled_date > today && workout?.status === 'SCHEDULED'
   const isEdit = workout?.status === 'COMPLETED'
 
   if (done) return (
@@ -210,30 +306,71 @@ export default function WorkoutLogPage() {
         {workout.exercises?.length ?? 0} exercises
       </p>
 
-      <div className="space-y-3 mb-6">
-        {workout.exercises?.map(ex => (
-          <ExercisePanel
-            key={ex.id}
-            ex={ex}
-            sets={logState[ex.id]?.sets || []}
-            notes={logState[ex.id]?.notes || ''}
-            onSetChange={(setIndex, key, val) => updateSet(ex.id, setIndex, key, val)}
-            onNotesChange={val => updateNotes(ex.id, val)}
-          />
-        ))}
-      </div>
+      {(() => {
+        const warmup   = workout.exercises?.filter(ex => ex.section === 'WARMUP')   || []
+        const main     = workout.exercises?.filter(ex => !ex.section || ex.section === 'MAIN') || []
+        const cooldown = workout.exercises?.filter(ex => ex.section === 'COOLDOWN') || []
+        return (
+          <div className="space-y-5 mb-6">
+            {warmup.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Warm Up</p>
+                <div className="space-y-2">
+                  {warmup.map(ex => <WarmCoolCard key={ex.id} ex={ex} />)}
+                </div>
+              </div>
+            )}
+            {main.length > 0 && (
+              <div>
+                {(warmup.length > 0 || cooldown.length > 0) && (
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Exercises</p>
+                )}
+                <div className="space-y-3">
+                  {main.map(ex => (
+                    <ExercisePanel
+                      key={ex.id}
+                      ex={ex}
+                      sets={logState[ex.id]?.sets || []}
+                      notes={logState[ex.id]?.notes || ''}
+                      onSetChange={(setIndex, key, val) => updateSet(ex.id, setIndex, key, val)}
+                      onNotesChange={val => updateNotes(ex.id, val)}
+                      readOnly={isFuture}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            {cooldown.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Cool Down</p>
+                <div className="space-y-2">
+                  {cooldown.map(ex => <WarmCoolCard key={ex.id} ex={ex} />)}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
-      {submitError && (
-        <p className="text-red-500 text-sm mb-3 text-center">{submitError}</p>
+      {isFuture ? (
+        <div className="card p-4 text-center border-blue-100 bg-blue-50">
+          <p className="text-sm font-semibold text-blue-700">Scheduled for {new Date(workout.scheduled_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+          <p className="text-xs text-blue-500 mt-0.5">You can log this workout on the day.</p>
+        </div>
+      ) : (
+        <>
+          {submitError && (
+            <p className="text-red-500 text-sm mb-3 text-center">{submitError}</p>
+          )}
+          <button
+            onClick={() => submitLog()}
+            disabled={isPending}
+            className="btn-primary w-full py-3.5 text-base"
+          >
+            {isPending ? 'Saving…' : isEdit ? 'Update Workout' : 'Complete Workout'}
+          </button>
+        </>
       )}
-
-      <button
-        onClick={() => submitLog()}
-        disabled={isPending}
-        className="btn-primary w-full py-3.5 text-base"
-      >
-        {isPending ? 'Saving…' : isEdit ? 'Update Workout' : 'Complete Workout'}
-      </button>
     </div>
   )
 }

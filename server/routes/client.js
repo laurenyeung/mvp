@@ -22,7 +22,7 @@ async function attachExercises(workouts) {
   if (!workouts.length) return workouts
   const ids = workouts.map(w => w.id)
   const { rows: exRows } = await query(
-    `SELECT we.*, e.name, e.description
+    `SELECT we.*, e.name, e.description, e.youtube_url
      FROM workout_exercises we
      JOIN exercises e ON e.id = we.exercise_id
      WHERE we.workout_id = ANY($1::uuid[])

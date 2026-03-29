@@ -2449,3 +2449,707 @@ describe('Section 29 — Optional Prescription Fields & No Muscle Groups', () =>
     })
   })
 })
+
+// =============================================================================
+// SECTION 30 — E2E Lifecycle: Full Workout Flow with Fresh Users
+// Self-contained: registers its own coach + client; does not depend on shared state.
+// Covers:
+//   - Coach registers, client registers, coach links client
+//   - Coach creates exercise + template, assigns to client for TODAY
+//   - Client logs workout with real set data
+//   - DB assertions: workout_logs, exercise_logs, exercise_set_logs
+//   - Client views workout from history — data identical to what was logged
+//   - Coach assigns a second workout for TOMORROW (future)
+//   - Client can fetch future workout with full exercise details
+//   - Future workout is NOT in today's list; IS in upcoming list
+// =============================================================================
+describe('Section 30 — E2E Lifecycle: Full Workout Flow with Fresh Users', () => {
+  let e2eCoachToken, e2eClientToken
+  let e2eClientProfileId
+  let e2eExerciseId, e2eTemplateId
+  let e2eTodayWorkoutId, e2eTodayWorkoutExerciseId
+  let e2eFutureWorkoutId
+  let e2eWorkoutLogId, e2eExerciseLogId
+
+  const E2E_COACH_EMAIL  = 'e2e_coach_test@example.com'
+  const E2E_CLIENT_EMAIL = 'e2e_client_test@example.com'
+  const E2E_PASS = 'TestE2E1234'
+
+  // ── Setup: fresh users ─────────────────────────────────────────────────────
+
+  test('TC-E2E-001 · Register new coach', async () => {
+    const res = await request(app)
+      .post('/api/v1/auth/register')
+      .send({ email: E2E_COACH_EMAIL, password: E2E_PASS, role: 'COACH', first_name: 'E2E', last_name: 'Coach' })
+    expect(res.status).toBe(201)
+    expect(res.body.data.user.role).toBe('COACH')
+    e2eCoachToken = res.body.data.token
+  })
+
+  test('TC-E2E-002 · Register new client', async () => {
+    const res = await request(app)
+      .post('/api/v1/auth/register')
+      .send({ email: E2E_CLIENT_EMAIL, password: E2E_PASS, role: 'CLIENT', first_name: 'E2E', last_name: 'Client' })
+    expect(res.status).toBe(201)
+    expect(res.body.data.user.role).toBe('CLIENT')
+    e2eClientToken = res.body.data.token
+    const clientUserId = res.body.data.user.id
+
+    // Coach links the client
+    const link = await request(app)
+      .post('/api/v1/coach/clients')
+      .set('Authorization', `Bearer ${e2eCoachToken}`)
+      .send({ user_id: clientUserId })
+    expect(link.status).toBe(201)
+    e2eClientProfileId = link.body.data.id
+
+    // DB: client_profile exists with correct coach
+    const { rows: cp } = await testPool.query('SELECT id FROM client_profiles WHERE id=$1', [e2eClientProfileId])
+    expect(cp).toHaveLength(1)
+  })
+
+  // ── Coach creates exercise + template ──────────────────────────────────────
+
+  test('TC-E2E-003 · Coach creates exercise and template', async () => {
+    const exRes = await request(app)
+      .post('/api/v1/exercises')
+      .set('Authorization', `Bearer ${e2eCoachToken}`)
+      .send({ name: 'E2E_Bench_Press_test', is_public: false })
+    expect(exRes.status).toBe(201)
+    e2eExerciseId = exRes.body.data.id
+
+    const tmplRes = await request(app)
+      .post('/api/v1/coach/templates')
+      .set('Authorization', `Bearer ${e2eCoachToken}`)
+      .send({
+        name: 'E2E Push Day',
+        exercises: [{
+          exercise_id: e2eExerciseId,
+          prescribed_sets: 3,
+          prescribed_reps: '8-10',
+          prescribed_rest_secs: 90,
+          notes: 'Squeeze at top',
+          log_weight: true,
+        }],
+      })
+    expect(tmplRes.status).toBe(201)
+    e2eTemplateId = tmplRes.body.data.id
+  })
+
+  // ── Coach assigns TODAY's workout ──────────────────────────────────────────
+
+  test('TC-E2E-004 · Coach assigns workout for today', async () => {
+    const res = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Authorization', `Bearer ${e2eCoachToken}`)
+      .send({
+        template_id: e2eTemplateId,
+        client_id: e2eClientProfileId,
+        scheduled_date: TODAY,
+        exercises: [{
+          exercise_id: e2eExerciseId,
+          prescribed_sets: 3,
+          prescribed_reps: '8-10',
+          prescribed_rest_secs: 90,
+          notes: 'Squeeze at top',
+          log_weight: true,
+        }],
+      })
+    expect(res.status).toBe(201)
+    e2eTodayWorkoutId = res.body.data.id
+
+    // DB: workout_exercises.log_weight=true
+    const { rows: we } = await testPool.query(
+      'SELECT id, log_weight, prescribed_sets, prescribed_reps, notes FROM workout_exercises WHERE workout_id=$1',
+      [e2eTodayWorkoutId]
+    )
+    expect(we).toHaveLength(1)
+    expect(we[0].log_weight).toBe(true)
+    expect(we[0].prescribed_sets).toBe(3)
+    expect(we[0].notes).toBe('Squeeze at top')
+    e2eTodayWorkoutExerciseId = we[0].id
+  })
+
+  test('TC-E2E-005 · Client sees today\'s workout with full exercise details', async () => {
+    const res = await request(app)
+      .get('/api/v1/client/workouts/today')
+      .set('Authorization', `Bearer ${e2eClientToken}`)
+    expect(res.status).toBe(200)
+    const workout = res.body.data.find(w => w.id === e2eTodayWorkoutId)
+    expect(workout).toBeTruthy()
+    expect(workout.exercises).toHaveLength(1)
+    expect(workout.exercises[0].log_weight).toBe(true)
+    expect(workout.exercises[0].prescribed_sets).toBe(3)
+    expect(workout.exercises[0].notes).toBe('Squeeze at top')
+  })
+
+  // ── Client logs the workout ────────────────────────────────────────────────
+
+  test('TC-E2E-006 · Client logs workout with per-set data', async () => {
+    const res = await request(app)
+      .post(`/api/v1/client/workouts/${e2eTodayWorkoutId}/log`)
+      .set('Authorization', `Bearer ${e2eClientToken}`)
+      .send({
+        overall_notes: 'Felt strong',
+        rating: 4,
+        exercise_logs: [{
+          workout_exercise_id: e2eTodayWorkoutExerciseId,
+          actual_sets: 3,
+          notes: 'Good session',
+          sets: [
+            { set_index: 0, reps: 10, weight: 60 },
+            { set_index: 1, reps: 9,  weight: 60 },
+            { set_index: 2, reps: 8,  weight: 57.5 },
+          ],
+        }],
+      })
+    expect(res.status).toBe(201)
+    e2eWorkoutLogId = res.body.data.id
+
+    // DB: workout status → COMPLETED
+    const { rows: w } = await testPool.query('SELECT status FROM workouts WHERE id=$1', [e2eTodayWorkoutId])
+    expect(w[0].status).toBe('COMPLETED')
+
+    // DB: workout_log with correct rating and notes
+    const { rows: wl } = await testPool.query('SELECT * FROM workout_logs WHERE id=$1', [e2eWorkoutLogId])
+    expect(wl[0].rating).toBe(4)
+    expect(wl[0].overall_notes).toBe('Felt strong')
+
+    // DB: exercise_log exists
+    const { rows: el } = await testPool.query(
+      'SELECT * FROM exercise_logs WHERE workout_log_id=$1', [e2eWorkoutLogId]
+    )
+    expect(el).toHaveLength(1)
+    expect(el[0].actual_sets).toBe(3)
+    expect(el[0].notes).toBe('Good session')
+    e2eExerciseLogId = el[0].id
+
+    // DB: per-set breakdown correct
+    const { rows: sets } = await testPool.query(
+      'SELECT * FROM exercise_set_logs WHERE exercise_log_id=$1 ORDER BY set_index', [e2eExerciseLogId]
+    )
+    expect(sets).toHaveLength(3)
+    expect(sets[0].reps).toBe(10);  expect(Number(sets[0].weight)).toBe(60)
+    expect(sets[1].reps).toBe(9);   expect(Number(sets[1].weight)).toBe(60)
+    expect(sets[2].reps).toBe(8);   expect(Number(sets[2].weight)).toBe(57.5)
+  })
+
+  // ── Client views from history — data matches ───────────────────────────────
+
+  test('TC-E2E-007 · Workout appears in client history with COMPLETED status', async () => {
+    const res = await request(app)
+      .get('/api/v1/client/workouts/past')
+      .set('Authorization', `Bearer ${e2eClientToken}`)
+    expect(res.status).toBe(200)
+    const w = res.body.data.find(w => w.id === e2eTodayWorkoutId)
+    expect(w).toBeTruthy()
+    expect(w.status).toBe('COMPLETED')
+  })
+
+  test('TC-E2E-008 · Client views completed workout — logged set data matches', async () => {
+    const res = await request(app)
+      .get(`/api/v1/client/workouts/${e2eTodayWorkoutId}`)
+      .set('Authorization', `Bearer ${e2eClientToken}`)
+    expect(res.status).toBe(200)
+
+    const workout = res.body.data
+    expect(workout.status).toBe('COMPLETED')
+    expect(workout.exercises).toHaveLength(1)
+
+    const el = workout.exercises[0].exercise_log
+    expect(el).toBeTruthy()
+    expect(el.actual_sets).toBe(3)
+    expect(el.notes).toBe('Good session')
+
+    // Sets match what was submitted
+    expect(el.sets).toHaveLength(3)
+    expect(el.sets[0].reps).toBe(10);  expect(Number(el.sets[0].weight)).toBe(60)
+    expect(el.sets[1].reps).toBe(9);   expect(Number(el.sets[1].weight)).toBe(60)
+    expect(el.sets[2].reps).toBe(8);   expect(Number(el.sets[2].weight)).toBe(57.5)
+  })
+
+  // ── Future workout: visible but not loggable ───────────────────────────────
+
+  test('TC-E2E-009 · Coach assigns workout for a future date', async () => {
+    const res = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Authorization', `Bearer ${e2eCoachToken}`)
+      .send({
+        template_id: e2eTemplateId,
+        client_id: e2eClientProfileId,
+        scheduled_date: TOMORROW,
+        exercises: [{
+          exercise_id: e2eExerciseId,
+          prescribed_sets: 4,
+          prescribed_reps: '6-8',
+          prescribed_weight: '70kg',
+          prescribed_rest_secs: 120,
+          notes: 'Go heavy today',
+          log_weight: true,
+        }],
+      })
+    expect(res.status).toBe(201)
+    e2eFutureWorkoutId = res.body.data.id
+
+    // DB: scheduled_date is tomorrow (pg returns DATE as string or Date; normalise with slice)
+    const { rows } = await testPool.query('SELECT scheduled_date FROM workouts WHERE id=$1', [e2eFutureWorkoutId])
+    expect(String(rows[0].scheduled_date).slice(0, 10)).toBe(TOMORROW)
+  })
+
+  test('TC-E2E-010 · Future workout NOT in today\'s list', async () => {
+    const res = await request(app)
+      .get('/api/v1/client/workouts/today')
+      .set('Authorization', `Bearer ${e2eClientToken}`)
+    expect(res.status).toBe(200)
+    expect(res.body.data.find(w => w.id === e2eFutureWorkoutId)).toBeFalsy()
+  })
+
+  test('TC-E2E-011 · Future workout IS in upcoming list with full exercise details', async () => {
+    const res = await request(app)
+      .get('/api/v1/client/workouts/upcoming')
+      .set('Authorization', `Bearer ${e2eClientToken}`)
+    expect(res.status).toBe(200)
+
+    const w = res.body.data.find(w => w.id === e2eFutureWorkoutId)
+    expect(w).toBeTruthy()
+    expect(w.status).toBe('SCHEDULED')
+    expect(w.scheduled_date).toBe(TOMORROW)
+
+    // All prescription details present
+    expect(w.exercises).toHaveLength(1)
+    const ex = w.exercises[0]
+    expect(ex.prescribed_sets).toBe(4)
+    expect(ex.prescribed_reps).toBe('6-8')
+    expect(ex.prescribed_weight).toBe('70kg')
+    expect(ex.prescribed_rest_secs).toBe(120)
+    expect(ex.notes).toBe('Go heavy today')
+    expect(ex.log_weight).toBe(true)
+  })
+
+  test('TC-E2E-012 · Future workout detail endpoint returns full prescription; status still SCHEDULED', async () => {
+    const res = await request(app)
+      .get(`/api/v1/client/workouts/${e2eFutureWorkoutId}`)
+      .set('Authorization', `Bearer ${e2eClientToken}`)
+    expect(res.status).toBe(200)
+
+    const workout = res.body.data
+    expect(workout.status).toBe('SCHEDULED')
+    expect(workout.scheduled_date).toBe(TOMORROW)
+    expect(workout.exercises).toHaveLength(1)
+
+    const ex = workout.exercises[0]
+    expect(ex.prescribed_sets).toBe(4)
+    expect(ex.prescribed_reps).toBe('6-8')
+    expect(ex.prescribed_weight).toBe('70kg')
+    expect(ex.notes).toBe('Go heavy today')
+    // No exercise_log — workout has not been logged
+    expect(ex.exercise_log).toBeUndefined()
+  })
+})
+
+// =============================================================================
+// SECTION 31 — YouTube URL on Exercises
+// Covers: creating exercise with youtube_url, PATCH to update it, is_public toggle,
+// and youtube_url appearing in client workout exercise data via attachExercises.
+// Depends on: coachToken, clientToken, clientProfileId, templateId (prior sections)
+// =============================================================================
+describe('Section 31 — YouTube URL & is_public Toggle on Exercises', () => {
+  let ytExerciseId
+  let ytWorkoutId
+  const YOUTUBE_URL = 'https://www.youtube.com/shorts/dQw4w9WgXcQ'
+
+  test('TC-YT-001 · Coach creates exercise with youtube_url — stored in DB', async () => {
+    const res = await request(app)
+      .post('/api/v1/exercises')
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({
+        name: 'YT_Demo_Exercise_test',
+        description: 'Has a demo video',
+        youtube_url: YOUTUBE_URL,
+        is_public: false,
+      })
+
+    expect(res.status).toBe(201)
+    expect(res.body.data.youtube_url).toBe(YOUTUBE_URL)
+    ytExerciseId = res.body.data.id
+
+    const { rows } = await testPool.query('SELECT youtube_url FROM exercises WHERE id=$1', [ytExerciseId])
+    expect(rows[0].youtube_url).toBe(YOUTUBE_URL)
+  })
+
+  test('TC-YT-002 · GET /exercises list includes youtube_url field', async () => {
+    const res = await request(app)
+      .get('/api/v1/exercises')
+      .set('Authorization', `Bearer ${coachToken}`)
+
+    expect(res.status).toBe(200)
+    const ex = res.body.data.find(e => e.id === ytExerciseId)
+    expect(ex).toBeTruthy()
+    expect(ex.youtube_url).toBe(YOUTUBE_URL)
+  })
+
+  test('TC-YT-003 · PATCH exercise updates youtube_url', async () => {
+    const newUrl = 'https://youtu.be/dQw4w9WgXcQ'
+    const res = await request(app)
+      .patch(`/api/v1/exercises/${ytExerciseId}`)
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({ youtube_url: newUrl })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.youtube_url).toBe(newUrl)
+
+    const { rows } = await testPool.query('SELECT youtube_url FROM exercises WHERE id=$1', [ytExerciseId])
+    expect(rows[0].youtube_url).toBe(newUrl)
+  })
+
+  test('TC-YT-004 · PATCH exercise toggles is_public from false to true', async () => {
+    const res = await request(app)
+      .patch(`/api/v1/exercises/${ytExerciseId}`)
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({ is_public: true })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.is_public).toBe(true)
+
+    const { rows } = await testPool.query('SELECT is_public FROM exercises WHERE id=$1', [ytExerciseId])
+    expect(rows[0].is_public).toBe(true)
+  })
+
+  test('TC-YT-005 · PATCH exercise toggles is_public back to false', async () => {
+    const res = await request(app)
+      .patch(`/api/v1/exercises/${ytExerciseId}`)
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({ is_public: false })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.is_public).toBe(false)
+
+    const { rows } = await testPool.query('SELECT is_public FROM exercises WHERE id=$1', [ytExerciseId])
+    expect(rows[0].is_public).toBe(false)
+  })
+
+  test('TC-YT-006 · youtube_url included in client workout exercise data', async () => {
+    // Assign a workout using ytExerciseId so it goes through attachExercises
+    const assignRes = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({
+        template_id: templateId,
+        client_id: clientProfileId,
+        scheduled_date: TOMORROW,
+        exercises: [{
+          exercise_id: ytExerciseId,
+          order_index: 0,
+          prescribed_sets: 2,
+          prescribed_reps: '10',
+        }],
+      })
+    expect(assignRes.status).toBe(201)
+    ytWorkoutId = assignRes.body.data.id
+
+    const res = await request(app)
+      .get(`/api/v1/client/workouts/${ytWorkoutId}`)
+      .set('Authorization', `Bearer ${clientToken}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.exercises).toHaveLength(1)
+    // youtube_url is propagated through attachExercises JOIN
+    expect(res.body.data.exercises[0].youtube_url).toBe('https://youtu.be/dQw4w9WgXcQ')
+  })
+
+  test('TC-YT-007 · Client cannot PATCH an exercise (403)', async () => {
+    const res = await request(app)
+      .patch(`/api/v1/exercises/${ytExerciseId}`)
+      .set('Authorization', `Bearer ${clientToken}`)
+      .send({ is_public: true })
+
+    expect(res.status).toBe(403)
+  })
+})
+
+// =============================================================================
+// SECTION 32 — log_bilateral Flag on Workout Exercises
+// Covers: flag stored on assignment, returned in client workout data,
+// and that log_weight + log_bilateral can coexist independently.
+// Depends on: coachToken, clientToken, clientProfileId, templateId, exerciseId
+// =============================================================================
+describe('Section 32 — log_bilateral Flag', () => {
+  let bilateralWorkoutId
+
+  test('TC-BILATERAL-001 · log_bilateral=true is stored on workout_exercises', async () => {
+    const res = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({
+        template_id: templateId,
+        client_id: clientProfileId,
+        scheduled_date: TOMORROW,
+        exercises: [{
+          exercise_id: exerciseId,
+          order_index: 0,
+          prescribed_sets: 3,
+          prescribed_reps: '10',
+          log_bilateral: true,
+        }],
+      })
+
+    expect(res.status).toBe(201)
+    bilateralWorkoutId = res.body.data.id
+
+    const { rows } = await testPool.query(
+      'SELECT log_bilateral, log_weight FROM workout_exercises WHERE workout_id=$1',
+      [bilateralWorkoutId]
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].log_bilateral).toBe(true)
+    expect(rows[0].log_weight).toBe(false) // independent from log_weight
+  })
+
+  test('TC-BILATERAL-002 · log_bilateral returned in client workout detail', async () => {
+    const res = await request(app)
+      .get(`/api/v1/client/workouts/${bilateralWorkoutId}`)
+      .set('Authorization', `Bearer ${clientToken}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.exercises).toHaveLength(1)
+    expect(res.body.data.exercises[0].log_bilateral).toBe(true)
+  })
+
+  test('TC-BILATERAL-003 · log_bilateral returned in today\'s workout list', async () => {
+    // Assign a bilateral workout for today to verify it also comes through today endpoint
+    const assignRes = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({
+        template_id: templateId,
+        client_id: clientProfileId,
+        scheduled_date: TODAY,
+        name: 'Bilateral Today',
+        exercises: [{
+          exercise_id: exerciseId,
+          order_index: 0,
+          prescribed_sets: 2,
+          log_bilateral: true,
+        }],
+      })
+    expect(assignRes.status).toBe(201)
+    const bilateralTodayId = assignRes.body.data.id
+
+    const res = await request(app)
+      .get('/api/v1/client/workouts/today')
+      .set('Authorization', `Bearer ${clientToken}`)
+
+    expect(res.status).toBe(200)
+    const w = res.body.data.find(w => w.id === bilateralTodayId)
+    expect(w).toBeTruthy()
+    expect(w.exercises[0].log_bilateral).toBe(true)
+  })
+
+  test('TC-BILATERAL-004 · log_weight and log_bilateral can both be true simultaneously', async () => {
+    const res = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({
+        template_id: templateId,
+        client_id: clientProfileId,
+        scheduled_date: TOMORROW,
+        exercises: [{
+          exercise_id: exerciseId,
+          order_index: 0,
+          prescribed_sets: 4,
+          log_weight: true,
+          log_bilateral: true,
+        }],
+      })
+
+    expect(res.status).toBe(201)
+    const { rows } = await testPool.query(
+      'SELECT log_weight, log_bilateral FROM workout_exercises WHERE workout_id=$1',
+      [res.body.data.id]
+    )
+    expect(rows[0].log_weight).toBe(true)
+    expect(rows[0].log_bilateral).toBe(true)
+  })
+
+  test('TC-BILATERAL-005 · log_bilateral defaults to false when not supplied', async () => {
+    const res = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({
+        template_id: templateId,
+        client_id: clientProfileId,
+        scheduled_date: TOMORROW,
+        exercises: [{
+          exercise_id: exerciseId,
+          order_index: 0,
+          prescribed_sets: 3,
+        }],
+      })
+
+    expect(res.status).toBe(201)
+    const { rows } = await testPool.query(
+      'SELECT log_bilateral FROM workout_exercises WHERE workout_id=$1',
+      [res.body.data.id]
+    )
+    expect(rows[0].log_bilateral).toBe(false)
+  })
+})
+
+// =============================================================================
+// SECTION 33 — Warmup / Cooldown Sections
+// Covers: template creation with WARMUP/MAIN/COOLDOWN exercises, section stored in
+// DB, section returned in client workout data, warmup/cooldown excluded from log.
+// Depends on: coachToken, clientToken, clientProfileId, exerciseId, exercise2Id
+// =============================================================================
+describe('Section 33 — Warmup / Cooldown Sections', () => {
+  let sectionTemplateId, sectionWorkoutId, sectionWorkoutExId
+
+  test('TC-SECTION-001 · Coach creates template with WARMUP, MAIN, and COOLDOWN exercises', async () => {
+    const res = await request(app)
+      .post('/api/v1/coach/templates')
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({
+        name: 'Section_TEST_Template',
+        exercises: [
+          { exercise_id: exerciseId,  order_index: 0, section: 'WARMUP', notes: 'Light jog' },
+          { exercise_id: exerciseId,  order_index: 1, section: 'MAIN',   prescribed_sets: 3, prescribed_reps: '8' },
+          { exercise_id: exercise2Id, order_index: 2, section: 'COOLDOWN', notes: 'Stretch quads' },
+        ],
+      })
+
+    expect(res.status).toBe(201)
+    sectionTemplateId = res.body.data.id
+
+    const { rows } = await testPool.query(
+      'SELECT section, notes FROM workout_template_exercises WHERE workout_template_id=$1 ORDER BY order_index',
+      [sectionTemplateId]
+    )
+    expect(rows).toHaveLength(3)
+    expect(rows[0].section).toBe('WARMUP')
+    expect(rows[0].notes).toBe('Light jog')
+    expect(rows[1].section).toBe('MAIN')
+    expect(rows[2].section).toBe('COOLDOWN')
+    expect(rows[2].notes).toBe('Stretch quads')
+  })
+
+  test('TC-SECTION-002 · Template GET returns section on each exercise', async () => {
+    const res = await request(app)
+      .get(`/api/v1/coach/templates/${sectionTemplateId}`)
+      .set('Authorization', `Bearer ${coachToken}`)
+
+    expect(res.status).toBe(200)
+    const exs = res.body.data.exercises
+    expect(exs).toHaveLength(3)
+    expect(exs.find(e => e.section === 'WARMUP')).toBeTruthy()
+    expect(exs.find(e => e.section === 'MAIN')).toBeTruthy()
+    expect(exs.find(e => e.section === 'COOLDOWN')).toBeTruthy()
+  })
+
+  test('TC-SECTION-003 · Assignment stores section on workout_exercises', async () => {
+    const res = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({
+        template_id: sectionTemplateId,
+        client_id: clientProfileId,
+        scheduled_date: TODAY,
+        exercises: [
+          { exercise_id: exerciseId,  order_index: 0, section: 'WARMUP', notes: 'Light jog' },
+          { exercise_id: exerciseId,  order_index: 1, section: 'MAIN',   prescribed_sets: 3, prescribed_reps: '8' },
+          { exercise_id: exercise2Id, order_index: 2, section: 'COOLDOWN', notes: 'Stretch quads' },
+        ],
+      })
+
+    expect(res.status).toBe(201)
+    sectionWorkoutId = res.body.data.id
+
+    const { rows } = await testPool.query(
+      'SELECT section FROM workout_exercises WHERE workout_id=$1 ORDER BY order_index',
+      [sectionWorkoutId]
+    )
+    expect(rows).toHaveLength(3)
+    expect(rows[0].section).toBe('WARMUP')
+    expect(rows[1].section).toBe('MAIN')
+    expect(rows[2].section).toBe('COOLDOWN')
+
+    // Capture the MAIN exercise id for logging test
+    const { rows: mainRows } = await testPool.query(
+      "SELECT id FROM workout_exercises WHERE workout_id=$1 AND section='MAIN'",
+      [sectionWorkoutId]
+    )
+    sectionWorkoutExId = mainRows[0].id
+  })
+
+  test('TC-SECTION-004 · Client workout detail includes section on each exercise', async () => {
+    const res = await request(app)
+      .get(`/api/v1/client/workouts/${sectionWorkoutId}`)
+      .set('Authorization', `Bearer ${clientToken}`)
+
+    expect(res.status).toBe(200)
+    const exs = res.body.data.exercises
+    expect(exs).toHaveLength(3)
+    expect(exs.find(e => e.section === 'WARMUP')).toBeTruthy()
+    expect(exs.find(e => e.section === 'MAIN')).toBeTruthy()
+    expect(exs.find(e => e.section === 'COOLDOWN')).toBeTruthy()
+  })
+
+  test('TC-SECTION-005 · Logging only the MAIN exercise succeeds; warmup/cooldown have no log entry', async () => {
+    const res = await request(app)
+      .post(`/api/v1/client/workouts/${sectionWorkoutId}/log`)
+      .set('Authorization', `Bearer ${clientToken}`)
+      .send({
+        exercise_logs: [{
+          workout_exercise_id: sectionWorkoutExId,
+          actual_sets: 3,
+          sets: [
+            { set_index: 0, reps: 8 },
+            { set_index: 1, reps: 8 },
+            { set_index: 2, reps: 7 },
+          ],
+        }],
+      })
+
+    expect(res.status).toBe(201)
+
+    // Only 1 exercise_log row — for the MAIN exercise
+    const { rows: logs } = await testPool.query(
+      'SELECT el.workout_exercise_id FROM exercise_logs el JOIN workout_logs wl ON wl.id=el.workout_log_id WHERE wl.workout_id=$1',
+      [sectionWorkoutId]
+    )
+    expect(logs).toHaveLength(1)
+    expect(logs[0].workout_exercise_id).toBe(sectionWorkoutExId)
+  })
+
+  test('TC-SECTION-006 · section defaults to MAIN when not supplied in assignment', async () => {
+    const res = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({
+        template_id: templateId,
+        client_id: clientProfileId,
+        scheduled_date: TOMORROW,
+        exercises: [{ exercise_id: exerciseId, order_index: 0, prescribed_sets: 3 }],
+      })
+
+    expect(res.status).toBe(201)
+    const { rows } = await testPool.query(
+      'SELECT section FROM workout_exercises WHERE workout_id=$1',
+      [res.body.data.id]
+    )
+    expect(rows[0].section).toBe('MAIN')
+  })
+
+  test('TC-SECTION-007 · invalid section value is rejected with 400', async () => {
+    const res = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Authorization', `Bearer ${coachToken}`)
+      .send({
+        template_id: templateId,
+        client_id: clientProfileId,
+        scheduled_date: TOMORROW,
+        exercises: [{ exercise_id: exerciseId, order_index: 0, section: 'STRETCHING' }],
+      })
+
+    expect(res.status).toBe(400)
+  })
+})

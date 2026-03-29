@@ -36,7 +36,7 @@ router.get('/templates', async (req, res, next) => {
                'id', wte.id, 'exercise_id', wte.exercise_id, 'name', e.name,
                'order_index', wte.order_index, 'prescribed_sets', wte.prescribed_sets,
                'prescribed_reps', wte.prescribed_reps, 'prescribed_rest_secs', wte.prescribed_rest_secs,
-               'notes', wte.notes
+               'notes', wte.notes, 'section', wte.section
              ) ORDER BY wte.order_index
            ) FILTER (WHERE wte.id IS NOT NULL), '[]'
          ) AS exercises
@@ -65,7 +65,7 @@ router.get('/templates/:id', async (req, res, next) => {
                'order_index', wte.order_index,
                'prescribed_sets', wte.prescribed_sets, 'prescribed_reps', wte.prescribed_reps,
                'prescribed_weight', wte.prescribed_weight, 'prescribed_tempo', wte.prescribed_tempo,
-               'prescribed_rest_secs', wte.prescribed_rest_secs, 'notes', wte.notes
+               'prescribed_rest_secs', wte.prescribed_rest_secs, 'notes', wte.notes, 'section', wte.section
              ) ORDER BY wte.order_index
            ) FILTER (WHERE wte.id IS NOT NULL), '[]'
          ) AS exercises
@@ -109,12 +109,12 @@ router.post('/templates', async (req, res, next) => {
         await client.query(
           `INSERT INTO workout_template_exercises
              (workout_template_id, exercise_id, order_index, prescribed_sets,
-              prescribed_reps, prescribed_weight, prescribed_tempo, prescribed_rest_secs, notes)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+              prescribed_reps, prescribed_weight, prescribed_tempo, prescribed_rest_secs, notes, section)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
           [template.id, ex.exercise_id, ex.order_index ?? i,
            ex.prescribed_sets ?? null, ex.prescribed_reps ?? null,
            ex.prescribed_weight ?? null, ex.prescribed_tempo ?? null,
-           ex.prescribed_rest_secs ?? null, ex.notes ?? null]
+           ex.prescribed_rest_secs ?? null, ex.notes ?? null, ex.section ?? 'MAIN']
         )
       }
       return template
@@ -160,12 +160,12 @@ router.put('/templates/:id', async (req, res, next) => {
           await client.query(
             `INSERT INTO workout_template_exercises
                (workout_template_id, exercise_id, order_index, prescribed_sets,
-                prescribed_reps, prescribed_weight, prescribed_tempo, prescribed_rest_secs, notes)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+                prescribed_reps, prescribed_weight, prescribed_tempo, prescribed_rest_secs, notes, section)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
             [idParsed.data, ex.exercise_id, ex.order_index ?? i,
              ex.prescribed_sets ?? null, ex.prescribed_reps ?? null,
              ex.prescribed_weight ?? null, ex.prescribed_tempo ?? null,
-             ex.prescribed_rest_secs ?? null, ex.notes ?? null]
+             ex.prescribed_rest_secs ?? null, ex.notes ?? null, ex.section ?? 'MAIN']
           )
         }
       }
@@ -424,6 +424,8 @@ router.post('/workouts/assign', async (req, res, next) => {
         prescribed_rest_secs: ex.prescribed_rest_secs ?? null,
         notes: ex.notes ?? null,
         log_weight: ex.log_weight ?? false,
+        log_bilateral: ex.log_bilateral ?? false,
+        section: ex.section ?? 'MAIN',
       }))
     } else {
       const { rows: tmplExercises } = await query(
@@ -451,11 +453,11 @@ router.post('/workouts/assign', async (req, res, next) => {
         await client.query(
           `INSERT INTO workout_exercises
              (workout_id, exercise_id, order_index, superset_group, prescribed_sets,
-              prescribed_reps, prescribed_weight, prescribed_tempo, prescribed_rest_secs, notes, log_weight)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+              prescribed_reps, prescribed_weight, prescribed_tempo, prescribed_rest_secs, notes, log_weight, log_bilateral, section)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
           [w.id, ex.exercise_id, ex.order_index, ex.superset_group,
            ex.prescribed_sets, ex.prescribed_reps, ex.prescribed_weight,
-           ex.prescribed_tempo, ex.prescribed_rest_secs, ex.notes, ex.log_weight ?? false]
+           ex.prescribed_tempo, ex.prescribed_rest_secs, ex.notes, ex.log_weight ?? false, ex.log_bilateral ?? false, ex.section ?? 'MAIN']
         )
       }
 
