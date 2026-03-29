@@ -13,6 +13,7 @@ import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
 const METRIC_TYPES = ['WEIGHT', 'BODY_FAT', 'WAIST', 'CUSTOM']
+const METRIC_LABELS = { WEIGHT: 'WEIGHT', BODY_FAT: 'BODY FAT', WAIST: 'WAIST', CUSTOM: 'CUSTOM' }
 const METRIC_UNITS = { WEIGHT: 'kg', BODY_FAT: '%', WAIST: 'cm', CUSTOM: '' }
 
 function AddMetricModal({ onClose }) {
@@ -46,7 +47,7 @@ function AddMetricModal({ onClose }) {
           <div>
             <label className="label">Metric Type</label>
             <select {...register('metric_type')} className="input">
-              {METRIC_TYPES.map(m => <option key={m} value={m}>{m}</option>)}
+              {METRIC_TYPES.map(m => <option key={m} value={m}>{METRIC_LABELS[m]}</option>)}
             </select>
           </div>
           {metricType === 'CUSTOM' && (
@@ -143,7 +144,7 @@ export default function ProgressPage() {
                 : 'bg-white text-gray-500 border-pixel-line hover:border-pixel-accent hover:text-pixel-dim'
             )}
           >
-            {m}
+            {METRIC_LABELS[m]}
           </button>
         ))}
       </div>

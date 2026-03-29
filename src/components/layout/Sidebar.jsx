@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Users, Dumbbell, MessageCircle, LayoutTemplate, Calendar, TrendingUp, History, LogOut } from 'lucide-react'
+import { Users, Dumbbell, LayoutTemplate, Calendar, History, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/features/auth/store/authStore'
 
@@ -7,15 +7,12 @@ const coachNav = [
   { to: '/coach/clients', icon: Users, label: 'Clients' },
   { to: '/coach/templates', icon: LayoutTemplate, label: 'Templates' },
   { to: '/exercises', icon: Dumbbell, label: 'Exercises' },
-  { to: '/messages', icon: MessageCircle, label: 'Messages' },
 ]
 
 const clientNav = [
   { to: '/client/today', icon: Calendar, label: 'Upcoming' },
   { to: '/client/history', icon: History, label: 'History' },
-  { to: '/client/progress', icon: TrendingUp, label: 'Progress' },
   { to: '/exercises', icon: Dumbbell, label: 'Exercises' },
-  { to: '/messages', icon: MessageCircle, label: 'Messages' },
 ]
 
 export default function Sidebar({ role }) {
