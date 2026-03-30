@@ -1,0 +1,23 @@
+# Dependabot automatically opens PRs to update vulnerable or outdated dependencies.
+# Scans both the frontend (root) and backend (server/) separately each week.
+
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - frontend
+
+  - package-ecosystem: npm
+    directory: /server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - backend
