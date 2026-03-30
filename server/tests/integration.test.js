@@ -18,7 +18,7 @@ import { cleanDatabase, closeDatabase, testPool } from './helpers/db.js'
 import app from '../index.js'
 
 // ── Shared state ──────────────────────────────────────────────────────────────
-let coachToken, clientToken, coach2Token
+let coachCookies, clientCookies, coach2Cookies
 let coachUserId, clientUserId, unlinkedClientUserId
 let clientProfileId
 let exerciseId, exercise2Id
@@ -56,7 +56,7 @@ describe('Section 1 — Authentication', () => {
 
     expect(res.status).toBe(201)
     expect(res.body.data.user.role).toBe('COACH')
-    expect(res.body.data.token).toBeTruthy()
+    expect(res.headers['set-cookie']?.some(c => c.startsWith('jwt='))).toBe(true)
     expect(res.body.data.user.password_hash).toBeUndefined()
 
     const { rows } = await testPool.query('SELECT * FROM users WHERE email=$1', [COACH_EMAIL])
@@ -112,9 +112,9 @@ describe('Section 1 — Authentication', () => {
       .send({ email: COACH_EMAIL, password: PASSWORD })
 
     expect(res.status).toBe(200)
-    expect(res.body.data.token).toBeTruthy()
+    expect(res.headers['set-cookie']?.some(c => c.startsWith('jwt='))).toBe(true)
     expect(res.body.data.user.role).toBe('COACH')
-    coachToken = res.body.data.token
+    coachCookies = res.headers['set-cookie']
   })
 
   test('TC-AUTH-002b · Client login returns token', async () => {
@@ -123,7 +123,7 @@ describe('Section 1 — Authentication', () => {
       .send({ email: CLIENT_EMAIL, password: PASSWORD })
 
     expect(res.status).toBe(200)
-    clientToken = res.body.data.token
+    clientCookies = res.headers['set-cookie']
   })
 
   test('TC-AUTH-002c · Wrong password returns 401', async () => {
@@ -141,7 +141,7 @@ describe('Section 1 — Authentication', () => {
   test('TC-AUTH-002e · GET /auth/me with valid token returns user', async () => {
     const res = await request(app)
       .get('/api/v1/auth/me')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(200)
     expect(res.body.data.user.email).toBe(COACH_EMAIL)
     expect(res.body.data.user.password_hash).toBeUndefined()
@@ -158,7 +158,7 @@ describe('Section 16 — Client Linking & Search', () => {
   test('TC-SEARCH-001 · ≥2 char query returns array', async () => {
     const res = await request(app)
       .get('/api/v1/coach/clients/search?q=cl')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.data)).toBe(true)
   })
@@ -166,7 +166,7 @@ describe('Section 16 — Client Linking & Search', () => {
   test('TC-SEARCH-002 · Finds unlinked client by partial name', async () => {
     const res = await request(app)
       .get('/api/v1/coach/clients/search?q=Unlink')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(200)
     const found = res.body.data.find(u => u.id === unlinkedClientUserId)
     expect(found).toBeTruthy()
@@ -176,7 +176,7 @@ describe('Section 16 — Client Linking & Search', () => {
   test('TC-SEARCH-003 · Finds client by email substring', async () => {
     const res = await request(app)
       .get(`/api/v1/coach/clients/search?q=${CLIENT_EMAIL.slice(0, 6)}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(200)
     expect(res.body.data.find(u => u.id === clientUserId)).toBeTruthy()
   })
@@ -184,7 +184,7 @@ describe('Section 16 — Client Linking & Search', () => {
   test('TC-SEARCH-004 · 1 char query returns empty array (not 400)', async () => {
     const res = await request(app)
       .get('/api/v1/coach/clients/search?q=a')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(200)
     expect(res.body.data).toHaveLength(0)
   })
@@ -192,7 +192,7 @@ describe('Section 16 — Client Linking & Search', () => {
   test('TC-SEARCH-005 · No q param returns empty array', async () => {
     const res = await request(app)
       .get('/api/v1/coach/clients/search')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(200)
     expect(res.body.data).toHaveLength(0)
   })
@@ -200,7 +200,7 @@ describe('Section 16 — Client Linking & Search', () => {
   test('TC-SEARCH-006 · COACH users never appear in results', async () => {
     const res = await request(app)
       .get('/api/v1/coach/clients/search?q=smith')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(200)
     expect(res.body.data.find(u => u.id === coachUserId)).toBeFalsy()
   })
@@ -213,7 +213,7 @@ describe('Section 16 — Client Linking & Search', () => {
   test('TC-CLIENT-LINK-001 · Coach links client → client_profile created', async () => {
     const res = await request(app)
       .post('/api/v1/coach/clients')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ user_id: clientUserId })
 
     expect(res.status).toBe(201)
@@ -232,7 +232,7 @@ describe('Section 16 — Client Linking & Search', () => {
   test('TC-CLIENT-LINK-002 · Duplicate link returns 409', async () => {
     const res = await request(app)
       .post('/api/v1/coach/clients')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ user_id: clientUserId })
     expect(res.status).toBe(409)
     expect(res.body.error.code).toBe('CONFLICT')
@@ -241,7 +241,7 @@ describe('Section 16 — Client Linking & Search', () => {
   test('TC-CLIENT-LINK-003 · Linked client disappears from search', async () => {
     const res = await request(app)
       .get('/api/v1/coach/clients/search?q=jones')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(200)
     // clientUserId (last name Jones) is now linked → must not appear
     expect(res.body.data.find(u => u.id === clientUserId)).toBeFalsy()
@@ -250,7 +250,7 @@ describe('Section 16 — Client Linking & Search', () => {
   test('TC-CLIENT-LINK-004 · Linking a COACH user returns 404', async () => {
     const res = await request(app)
       .post('/api/v1/coach/clients')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ user_id: coachUserId })
     expect(res.status).toBe(404)
   })
@@ -258,7 +258,7 @@ describe('Section 16 — Client Linking & Search', () => {
   test('TC-CLIENT-LINK-005 · Invalid UUID returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/coach/clients')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ user_id: 'not-a-uuid' })
     expect(res.status).toBe(400)
   })
@@ -266,7 +266,7 @@ describe('Section 16 — Client Linking & Search', () => {
   test('TC-CLIENT-LINK-006 · Linked client appears in GET /coach/clients roster', async () => {
     const res = await request(app)
       .get('/api/v1/coach/clients')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(200)
     const found = res.body.data.find(c => c.user_id === clientUserId)
     expect(found).toBeTruthy()
@@ -285,7 +285,7 @@ describe('Section 2 — Exercise Library', () => {
   test('TC-EXERCISE-001 · Coach creates exercise', async () => {
     const res = await request(app)
       .post('/api/v1/exercises')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         name: 'Barbell_TEST_Squat',
         description: 'Compound lower body movement',
@@ -305,7 +305,7 @@ describe('Section 2 — Exercise Library', () => {
   test('TC-EXERCISE-001b · Coach creates second exercise (for template with multiple)', async () => {
     const res = await request(app)
       .post('/api/v1/exercises')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ name: 'Romanian_TEST_Deadlift' })
     expect(res.status).toBe(201)
     exercise2Id = res.body.data.id
@@ -314,7 +314,7 @@ describe('Section 2 — Exercise Library', () => {
   test('TC-EXERCISE-002 · Client cannot create exercise (403)', async () => {
     const res = await request(app)
       .post('/api/v1/exercises')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ name: 'Hack_TEST_Squat' })
     expect(res.status).toBe(403)
   })
@@ -322,7 +322,7 @@ describe('Section 2 — Exercise Library', () => {
   test('TC-EXERCISE-003 · Exercise list returns coach\'s exercises', async () => {
     const res = await request(app)
       .get('/api/v1/exercises')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(200)
     expect(res.body.data.find(e => e.id === exerciseId)).toBeTruthy()
     expect(res.body.data.find(e => e.id === exercise2Id)).toBeTruthy()
@@ -331,14 +331,14 @@ describe('Section 2 — Exercise Library', () => {
   test('TC-EXERCISE-004 · Exercise list is accessible to clients', async () => {
     const res = await request(app)
       .get('/api/v1/exercises')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(res.status).toBe(200)
   })
 
   test('TC-EXERCISE-005 · Exercise name required — missing returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/exercises')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ primary_muscle_group: 'Legs' })
     expect(res.status).toBe(400)
   })
@@ -352,7 +352,7 @@ describe('Section 3 — Workout Templates', () => {
   test('TC-TEMPLATE-001 · Coach creates template with two exercises', async () => {
     const res = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         name: 'Lower Body Day',
         description: 'Strength workout',
@@ -398,7 +398,7 @@ describe('Section 3 — Workout Templates', () => {
     // Regression: null was rejected by old schema (.optional() without .nullable())
     const res = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         name: 'Null_TEST_Rest',
         exercises: [{
@@ -421,7 +421,7 @@ describe('Section 3 — Workout Templates', () => {
   test('TC-TEMPLATE-002 · Client cannot create template (403)', async () => {
     const res = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ name: 'Hack attempt' })
     expect(res.status).toBe(403)
   })
@@ -429,7 +429,7 @@ describe('Section 3 — Workout Templates', () => {
   test('TC-TEMPLATE-003 · Template list returns created templates', async () => {
     const res = await request(app)
       .get('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(200)
     expect(res.body.data.find(t => t.id === templateId)).toBeTruthy()
   })
@@ -437,7 +437,7 @@ describe('Section 3 — Workout Templates', () => {
   test('TC-TEMPLATE-004 · GET /coach/templates/:id returns exercises nested', async () => {
     const res = await request(app)
       .get(`/api/v1/coach/templates/${templateId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(200)
     expect(res.body.data.exercises).toHaveLength(2)
     expect(res.body.data.exercises[0].name).toBeTruthy()
@@ -446,7 +446,7 @@ describe('Section 3 — Workout Templates', () => {
   test('TC-TEMPLATE-005 · Template name required — empty name returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ name: '' })
     expect(res.status).toBe(400)
   })
@@ -454,7 +454,7 @@ describe('Section 3 — Workout Templates', () => {
   test('TC-TEMPLATE-006 · Updating template replaces exercise list', async () => {
     const res = await request(app)
       .put(`/api/v1/coach/templates/${templateId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         name: 'Lower Body Day Updated',
         exercises: [{ exercise_id: exerciseId, prescribed_sets: 5, prescribed_reps: '6' }],
@@ -472,7 +472,7 @@ describe('Section 3 — Workout Templates', () => {
     // templateId was renamed to 'Lower Body Day Updated' by TC-TEMPLATE-006
     const res = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ name: 'Lower Body Day Updated', exercises: [] })
     expect(res.status).toBe(409)
     expect(res.body.error.code).toBe('CONFLICT')
@@ -490,7 +490,7 @@ describe('Section 4 — Workout Assignment', () => {
   test('TC-ASSIGN-001 · Coach assigns workout → snapshot created + notification sent', async () => {
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: TODAY })
 
     expect(res.status).toBe(201)
@@ -522,7 +522,7 @@ describe('Section 4 — Workout Assignment', () => {
     // Update template prescribed_sets to 99
     await request(app)
       .put(`/api/v1/coach/templates/${templateId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ exercises: [{ exercise_id: exerciseId, prescribed_sets: 20, prescribed_reps: '1' }] })
 
     // Snapshot must still have original 5 sets
@@ -535,7 +535,7 @@ describe('Section 4 — Workout Assignment', () => {
   test('TC-ASSIGN-002 · Assigning future workout', async () => {
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: TOMORROW, name: 'Bonus Day' })
     expect(res.status).toBe(201)
     expect(res.body.data.name).toBe('Bonus Day')
@@ -544,7 +544,7 @@ describe('Section 4 — Workout Assignment', () => {
   test('TC-ASSIGN-003 · Invalid client_id UUID returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: 'bad-uuid', scheduled_date: TODAY })
     expect(res.status).toBe(400)
   })
@@ -552,7 +552,7 @@ describe('Section 4 — Workout Assignment', () => {
   test('TC-ASSIGN-004 · Non-existent template returns 404', async () => {
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         template_id: '00000000-0000-4000-8000-000000000001',
         client_id: clientProfileId,
@@ -564,7 +564,7 @@ describe('Section 4 — Workout Assignment', () => {
   test('TC-ASSIGN-005 · Exercise overrides in assign payload override template defaults', async () => {
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         template_id: templateId,
         client_id: clientProfileId,
@@ -594,7 +594,7 @@ describe('Section 4 — Workout Assignment', () => {
   test('TC-ASSIGN-006 · log_weight=true is stored on workout_exercises', async () => {
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         template_id: templateId,
         client_id: clientProfileId,
@@ -625,7 +625,7 @@ describe('Section 5 — Client Dashboard', () => {
   test('TC-DASHBOARD-001 · Client fetches today\'s workout with exercises', async () => {
     const res = await request(app)
       .get('/api/v1/client/workouts/today')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
 
     expect(res.status).toBe(200)
     // today now returns an array (multiple same-day workouts are supported)
@@ -644,7 +644,7 @@ describe('Section 5 — Client Dashboard', () => {
   test('TC-DASHBOARD-002 · Client fetches upcoming workouts', async () => {
     const res = await request(app)
       .get('/api/v1/client/workouts/upcoming')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
 
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.data)).toBe(true)
@@ -658,12 +658,12 @@ describe('Section 5 — Client Dashboard', () => {
     // Assign a past workout first
     await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: YESTERDAY })
 
     const res = await request(app)
       .get('/api/v1/client/workouts/past')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
 
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.data)).toBe(true)
@@ -673,7 +673,7 @@ describe('Section 5 — Client Dashboard', () => {
   test('TC-DASHBOARD-004 · GET /client/workouts returns all with exercises', async () => {
     const res = await request(app)
       .get('/api/v1/client/workouts')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
 
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.data)).toBe(true)
@@ -688,7 +688,7 @@ describe('Section 5 — Client Dashboard', () => {
   test('TC-DASHBOARD-005 · Coach cannot access client dashboard (403)', async () => {
     const res = await request(app)
       .get('/api/v1/client/workouts/today')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(403)
   })
 })
@@ -701,7 +701,7 @@ describe('Section 6 — Workout Logging', () => {
   test('TC-LOG-001 · Client logs workout with per-set breakdown', async () => {
     const res = await request(app)
       .post(`/api/v1/client/workouts/${workoutId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({
         rating: 4,
         overall_notes: 'Felt strong today',
@@ -765,7 +765,7 @@ describe('Section 6 — Workout Logging', () => {
   test('TC-LOG-002 · Re-submit with exercise_logs:[] updates rating only — prior exercise_logs untouched', async () => {
     const res = await request(app)
       .post(`/api/v1/client/workouts/${workoutId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ rating: 5, overall_notes: 'Updated notes', exercise_logs: [] })
 
     expect(res.status).toBe(201)
@@ -781,7 +781,7 @@ describe('Section 6 — Workout Logging', () => {
     const otherWorkoutId = '00000000-0000-4000-8000-000000000002'
     const res = await request(app)
       .post(`/api/v1/client/workouts/${otherWorkoutId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ exercise_logs: [] })
     expect(res.status).toBe(404)
   })
@@ -789,7 +789,7 @@ describe('Section 6 — Workout Logging', () => {
   test('TC-LOG-005 · GET /client/workouts/:id returns exercise_log with sets for COMPLETED workout', async () => {
     const res = await request(app)
       .get(`/api/v1/client/workouts/${workoutId}`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
 
     expect(res.status).toBe(200)
     expect(res.body.data.id).toBe(workoutId)
@@ -805,13 +805,13 @@ describe('Section 6 — Workout Logging', () => {
   test('TC-LOG-006 · GET /client/workouts/:id returns null exercise_log for SCHEDULED workout', async () => {
     const assign = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: TODAY })
     const scheduledId = assign.body.data.id
 
     const res = await request(app)
       .get(`/api/v1/client/workouts/${scheduledId}`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
 
     expect(res.status).toBe(200)
     expect(res.body.data.status).toBe('SCHEDULED')
@@ -822,7 +822,7 @@ describe('Section 6 — Workout Logging', () => {
     // Assign a fresh workout to use for edit tests
     const assign = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: YESTERDAY })
     const editWorkoutId = assign.body.data.id
     const { rows: we } = await testPool.query('SELECT id FROM workout_exercises WHERE workout_id=$1', [editWorkoutId])
@@ -830,7 +830,7 @@ describe('Section 6 — Workout Logging', () => {
     // First log: 3 sets @ 100kg
     await request(app)
       .post(`/api/v1/client/workouts/${editWorkoutId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({
         exercise_logs: [{
           workout_exercise_id: we[0].id,
@@ -846,7 +846,7 @@ describe('Section 6 — Workout Logging', () => {
     // Re-submit: 2 sets @ 120kg (different values)
     const res = await request(app)
       .post(`/api/v1/client/workouts/${editWorkoutId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({
         exercise_logs: [{
           workout_exercise_id: we[0].id,
@@ -879,7 +879,7 @@ describe('Section 6 — Workout Logging', () => {
     // Instead verify via the main workoutId after a re-submit with new values
     const assign = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: YESTERDAY })
     const fetchEditId = assign.body.data.id
     const { rows: we } = await testPool.query('SELECT id FROM workout_exercises WHERE workout_id=$1', [fetchEditId])
@@ -887,19 +887,19 @@ describe('Section 6 — Workout Logging', () => {
     // Initial log
     await request(app)
       .post(`/api/v1/client/workouts/${fetchEditId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ exercise_logs: [{ workout_exercise_id: we[0].id, sets: [{ set_index: 0, reps: 5, weight: 50 }] }] })
 
     // Edit with new values
     await request(app)
       .post(`/api/v1/client/workouts/${fetchEditId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ exercise_logs: [{ workout_exercise_id: we[0].id, notes: 'felt easy', sets: [{ set_index: 0, reps: 10, weight: 80 }] }] })
 
     // Fetch the workout — exercise_log should show updated values
     const res = await request(app)
       .get(`/api/v1/client/workouts/${fetchEditId}`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
 
     expect(res.status).toBe(200)
     const log = res.body.data.exercises[0].exercise_log
@@ -913,7 +913,7 @@ describe('Section 6 — Workout Logging', () => {
   test('TC-LOG-009 · GET /client/workouts/:id for another client\'s workout returns 404', async () => {
     const res = await request(app)
       .get(`/api/v1/client/workouts/00000000-0000-4000-8000-000000000002`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(res.status).toBe(404)
   })
 
@@ -921,14 +921,14 @@ describe('Section 6 — Workout Logging', () => {
     // Assign another workout first
     const assign = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: YESTERDAY })
     const newWorkoutId = assign.body.data.id
     const { rows: we } = await testPool.query('SELECT id FROM workout_exercises WHERE workout_id=$1', [newWorkoutId])
 
     const res = await request(app)
       .post(`/api/v1/client/workouts/${newWorkoutId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({
         exercise_logs: [{
           workout_exercise_id: we[0].id,
@@ -955,7 +955,7 @@ describe('Section 7 — Media Upload', () => {
   test('TC-MEDIA-001 · Client registers exercise video → activity + notification created', async () => {
     const res = await request(app)
       .post(`/api/v1/client/exercise-logs/${exerciseLogId}/media`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({
         s3_key: `uploads/exercise_log/${clientUserId}/squat-form.mp4`,
         mime_type: 'video/mp4',
@@ -987,7 +987,7 @@ describe('Section 7 — Media Upload', () => {
   test('TC-MEDIA-002 · Invalid mime type returns 400', async () => {
     const res = await request(app)
       .post(`/api/v1/client/exercise-logs/${exerciseLogId}/media`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({
         s3_key: 'uploads/test/doc.pdf',
         mime_type: 'application/pdf',
@@ -1005,7 +1005,7 @@ describe('Section 8 — Coach Reviews Client Workout', () => {
   test('TC-REVIEW-001 · Coach views client workouts by clientProfileId', async () => {
     const res = await request(app)
       .get(`/api/v1/coach/clients/${clientProfileId}/workouts`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
 
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.data)).toBe(true)
@@ -1015,7 +1015,7 @@ describe('Section 8 — Coach Reviews Client Workout', () => {
   test('TC-REVIEW-002 · Coach filters client workouts by status', async () => {
     const res = await request(app)
       .get(`/api/v1/coach/clients/${clientProfileId}/workouts?status=COMPLETED`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
 
     expect(res.status).toBe(200)
     res.body.data.forEach(w => expect(w.status).toBe('COMPLETED'))
@@ -1024,7 +1024,7 @@ describe('Section 8 — Coach Reviews Client Workout', () => {
   test('TC-REVIEW-003 · Coach views client detail', async () => {
     const res = await request(app)
       .get(`/api/v1/coach/clients/${clientProfileId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
 
     expect(res.status).toBe(200)
     expect(res.body.data.email).toBe(CLIENT_EMAIL)
@@ -1040,7 +1040,7 @@ describe('Section 9 — Comments', () => {
   test('TC-COMMENT-001 · Coach posts workout comment → notification sent to client', async () => {
     const res = await request(app)
       .post(`/api/v1/coach/workouts/${workoutId}/comments`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ content: 'Great depth on those squats!' })
 
     expect(res.status).toBe(201)
@@ -1063,7 +1063,7 @@ describe('Section 9 — Comments', () => {
   test('TC-COMMENT-002 · Client reads workout comments', async () => {
     const res = await request(app)
       .get(`/api/v1/client/workouts/${workoutId}/comments`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
 
     expect(res.status).toBe(200)
     expect(res.body.data).toHaveLength(1)
@@ -1074,7 +1074,7 @@ describe('Section 9 — Comments', () => {
   test('TC-COMMENT-003 · Client posts workout comment', async () => {
     const res = await request(app)
       .post(`/api/v1/client/workouts/${workoutId}/comments`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ content: 'Thanks coach!' })
 
     expect(res.status).toBe(201)
@@ -1089,7 +1089,7 @@ describe('Section 9 — Comments', () => {
   test('TC-COMMENT-004 · Coach reads updated comment thread', async () => {
     const res = await request(app)
       .get(`/api/v1/coach/workouts/${workoutId}/comments`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
 
     expect(res.status).toBe(200)
     expect(res.body.data).toHaveLength(2)
@@ -1103,7 +1103,7 @@ describe('Section 9 — Comments', () => {
   test('TC-COMMENT-005 · Client posts exercise comment', async () => {
     const res = await request(app)
       .post(`/api/v1/client/exercise-logs/${exerciseLogId}/comments`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ content: 'Lower back was tight on set 3' })
 
     expect(res.status).toBe(201)
@@ -1116,7 +1116,7 @@ describe('Section 9 — Comments', () => {
   test('TC-COMMENT-006 · Empty comment returns 400', async () => {
     const res = await request(app)
       .post(`/api/v1/coach/workouts/${workoutId}/comments`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ content: '   ' })
     expect(res.status).toBe(400)
   })
@@ -1130,7 +1130,7 @@ describe('Section 10 — Workout Exercise Prescription Edit', () => {
   test('TC-WE-001 · Coach updates prescription on instantiated exercise', async () => {
     const res = await request(app)
       .patch(`/api/v1/coach/workout-exercises/${workoutExerciseId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ prescribed_sets: 4, prescribed_reps: '6' })
 
     expect(res.status).toBe(200)
@@ -1142,7 +1142,7 @@ describe('Section 10 — Workout Exercise Prescription Edit', () => {
   test('TC-WE-002 · Client cannot edit prescription (403)', async () => {
     const res = await request(app)
       .patch(`/api/v1/coach/workout-exercises/${workoutExerciseId}`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ prescribed_sets: 99 })
     expect(res.status).toBe(403)
   })
@@ -1156,7 +1156,7 @@ describe('Section 11 — Client Sees Updated Prescription', () => {
   test('TC-PRESCRIPTION-001 · Client workout list reflects coach\'s edit', async () => {
     const res = await request(app)
       .get('/api/v1/client/workouts')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
 
     expect(res.status).toBe(200)
     const w = res.body.data.find(w => w.id === workoutId)
@@ -1183,7 +1183,7 @@ describe('Section 12 — Messaging', () => {
 
     const res = await request(app)
       .post('/api/v1/messages/send')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ thread_id: threadId, content: 'How are you feeling after yesterday?' })
 
     expect(res.status).toBe(201)
@@ -1201,7 +1201,7 @@ describe('Section 12 — Messaging', () => {
 
     const res = await request(app)
       .post('/api/v1/messages/send')
-      .set('Authorization', `Bearer ${loginRes.body.data.token}`)
+      .set('Cookie', loginRes.headers['set-cookie'])
       .send({ thread_id: threadId, content: 'Intrusion attempt' })
     expect(res.status).toBe(403)
   })
@@ -1209,12 +1209,12 @@ describe('Section 12 — Messaging', () => {
   test('TC-MESSAGE-003 · Both participants see the thread', async () => {
     const coachRes = await request(app)
       .get('/api/v1/messages/threads')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(coachRes.body.data.find(t => t.id === threadId)).toBeTruthy()
 
     const clientRes = await request(app)
       .get('/api/v1/messages/threads')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(clientRes.body.data.find(t => t.id === threadId)).toBeTruthy()
   })
 })
@@ -1227,7 +1227,7 @@ describe('Section 13 — Progress Tracking', () => {
   test('TC-PROGRESS-001 · Client logs bodyweight', async () => {
     const res = await request(app)
       .post('/api/v1/client/progress')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ metric_type: 'WEIGHT', value: 175, unit: 'lb', recorded_at: TODAY })
 
     expect(res.status).toBe(201)
@@ -1239,7 +1239,7 @@ describe('Section 13 — Progress Tracking', () => {
   test('TC-PROGRESS-002 · Missing recorded_at returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/client/progress')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ metric_type: 'WEIGHT', value: 175, unit: 'lb' })
     expect(res.status).toBe(400)
   })
@@ -1247,7 +1247,7 @@ describe('Section 13 — Progress Tracking', () => {
   test('TC-PROGRESS-003 · Progress list filterable by metric_type', async () => {
     const res = await request(app)
       .get('/api/v1/client/progress?metric_type=WEIGHT')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(res.status).toBe(200)
     expect(res.body.data.find(p => p.id === progressId)).toBeTruthy()
     res.body.data.forEach(p => expect(p.metric_type).toBe('WEIGHT'))
@@ -1278,18 +1278,18 @@ describe('Section 14 — Permission Enforcement', () => {
     const loginRes = await request(app)
       .post('/api/v1/auth/login')
       .send({ email: COACH2_EMAIL, password: PASSWORD })
-    coach2Token = loginRes.body.data.token
+    coach2Cookies = loginRes.headers['set-cookie']
 
     const res = await request(app)
       .get(`/api/v1/coach/clients/${clientProfileId}`)
-      .set('Authorization', `Bearer ${coach2Token}`)
+      .set('Cookie', coach2Cookies)
     expect([403, 404]).toContain(res.status)
   })
 
   test('TC-PERM-003 · Coach 2 search excludes clients already assigned to any coach', async () => {
     const res = await request(app)
       .get('/api/v1/coach/clients/search?q=jones')
-      .set('Authorization', `Bearer ${coach2Token}`)
+      .set('Cookie', coach2Cookies)
     expect(res.status).toBe(200)
     // clientUserId is linked to coach 1 → must not appear for coach 2
     expect(res.body.data.find(u => u.id === clientUserId)).toBeFalsy()
@@ -1300,7 +1300,7 @@ describe('Section 14 — Permission Enforcement', () => {
   test('TC-PERM-004 · Client cannot view another client\'s workouts', async () => {
     const res = await request(app)
       .get(`/api/v1/coach/clients/${clientProfileId}/workouts`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(res.status).toBe(403)
   })
 
@@ -1308,7 +1308,7 @@ describe('Section 14 — Permission Enforcement', () => {
     const fakeWorkoutId = '00000000-0000-4000-8000-000000000003'
     const res = await request(app)
       .post(`/api/v1/client/workouts/${fakeWorkoutId}/comments`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ content: 'Should not work' })
     expect(res.status).toBe(404)
   })
@@ -1316,7 +1316,7 @@ describe('Section 14 — Permission Enforcement', () => {
   test('TC-PERM-006 · Coach cannot delete COMPLETED workout', async () => {
     const res = await request(app)
       .delete(`/api/v1/coach/workouts/${workoutId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(409)
   })
 })
@@ -1407,7 +1407,7 @@ describe('Section 18 — Multiple Workouts Same Day', () => {
   test('TC-MULTIDAY-001 · Coach assigns second workout for today', async () => {
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: TODAY, name: 'PM Cardio' })
     expect(res.status).toBe(201)
     secondTodayWorkoutId = res.body.data.id
@@ -1416,7 +1416,7 @@ describe('Section 18 — Multiple Workouts Same Day', () => {
   test('TC-MULTIDAY-002 · /client/workouts/today returns ALL today workouts as array', async () => {
     const res = await request(app)
       .get('/api/v1/client/workouts/today')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.data)).toBe(true)
     // Must include both today workouts
@@ -1428,7 +1428,7 @@ describe('Section 18 — Multiple Workouts Same Day', () => {
   test('TC-MULTIDAY-003 · Today workouts all include exercises array', async () => {
     const res = await request(app)
       .get('/api/v1/client/workouts/today')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(res.status).toBe(200)
     res.body.data.forEach(w => {
       expect(Array.isArray(w.exercises)).toBe(true)
@@ -1443,10 +1443,10 @@ describe('Section 18 — Multiple Workouts Same Day', () => {
     const loginRes = await request(app)
       .post('/api/v1/auth/login')
       .send({ email: 'noworkout_test@example.com', password: 'TestPassword123' })
-    const emptyToken = loginRes.body.data.token
+    const emptyCookies = loginRes.headers['set-cookie']
     const res = await request(app)
       .get('/api/v1/client/workouts/today')
-      .set('Authorization', `Bearer ${emptyToken}`)
+      .set('Cookie', emptyCookies)
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.data)).toBe(true)
     expect(res.body.data).toHaveLength(0)
@@ -1464,7 +1464,7 @@ describe('Section 19 — Snapshot Integrity After Deletion', () => {
   test('TC-SNAP-001 · Create a dedicated template and assign it', async () => {
     const tmpl = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         name: 'Snap_TEST_Template',
         exercises: [{ exercise_id: exerciseId, prescribed_sets: 3, prescribed_reps: '10' }],
@@ -1474,7 +1474,7 @@ describe('Section 19 — Snapshot Integrity After Deletion', () => {
 
     const assign = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: isolatedTemplateId, client_id: clientProfileId, scheduled_date: TOMORROW })
     expect(assign.status).toBe(201)
     isolatedWorkoutId = assign.body.data.id
@@ -1484,19 +1484,19 @@ describe('Section 19 — Snapshot Integrity After Deletion', () => {
     // Soft-delete the template
     const del = await request(app)
       .delete(`/api/v1/coach/templates/${isolatedTemplateId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(del.status).toBe(200)
 
     // Archived template must not appear in template list
     const listRes = await request(app)
       .get('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(listRes.body.data.find(t => t.id === isolatedTemplateId)).toBeFalsy()
 
     // But the workout snapshot still exists and is accessible
     const wRes = await request(app)
       .get(`/api/v1/coach/clients/${clientProfileId}/workouts`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(wRes.status).toBe(200)
     const found = wRes.body.data.find(w => w.id === isolatedWorkoutId)
     expect(found).toBeTruthy()
@@ -1519,7 +1519,7 @@ describe('Section 19 — Snapshot Integrity After Deletion', () => {
     // coach2 tries to delete coach1's (already archived) template
     const res = await request(app)
       .delete(`/api/v1/coach/templates/${isolatedTemplateId}`)
-      .set('Authorization', `Bearer ${coach2Token}`)
+      .set('Cookie', coach2Cookies)
     // Should succeed (200) but affect 0 rows — not expose an error
     expect(res.status).toBe(200)
 
@@ -1534,7 +1534,7 @@ describe('Section 19 — Snapshot Integrity After Deletion', () => {
     // isolatedTemplateId was archived in TC-SNAP-002
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: isolatedTemplateId, client_id: clientProfileId, scheduled_date: TOMORROW })
     expect(res.status).toBe(404)
     expect(res.body.error.code).toBe('NOT_FOUND')
@@ -1543,7 +1543,7 @@ describe('Section 19 — Snapshot Integrity After Deletion', () => {
   test('TC-SNAP-006 · GET /coach/templates/:id for archived template returns 404', async () => {
     const res = await request(app)
       .get(`/api/v1/coach/templates/${isolatedTemplateId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(404)
   })
 })
@@ -1557,7 +1557,7 @@ describe('Section 20 — Workout Rescheduling', () => {
   test('TC-RESCHEDULE-001 · Coach can reschedule a SCHEDULED workout to future date', async () => {
     const assign = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: TOMORROW, name: 'Reschedule_TEST' })
     expect(assign.status).toBe(201)
     rescheduleWorkoutId = assign.body.data.id
@@ -1567,7 +1567,7 @@ describe('Section 20 — Workout Rescheduling', () => {
     })()
     const res = await request(app)
       .patch(`/api/v1/coach/workouts/${rescheduleWorkoutId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ scheduled_date: dayAfterTomorrow })
     expect(res.status).toBe(200)
     expect(res.body.data.scheduled_date).toBe(dayAfterTomorrow)
@@ -1580,7 +1580,7 @@ describe('Section 20 — Workout Rescheduling', () => {
   test('TC-RESCHEDULE-002 · Workout no longer appears in original date\'s upcoming list after reschedule', async () => {
     const res = await request(app)
       .get('/api/v1/client/workouts/upcoming')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     // The workout was for TOMORROW before patch; it's now day+2 — TOMORROW slot for this workout should be gone
     const stillOnTomorrow = res.body.data.find(w => w.id === rescheduleWorkoutId && w.scheduled_date === TOMORROW)
     expect(stillOnTomorrow).toBeFalsy()
@@ -1590,7 +1590,7 @@ describe('Section 20 — Workout Rescheduling', () => {
     // This is the real-world behavior: coaches may need to back-date workouts
     const res = await request(app)
       .patch(`/api/v1/coach/workouts/${rescheduleWorkoutId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ scheduled_date: YESTERDAY })
     expect(res.status).toBe(200)
     expect(res.body.data.scheduled_date).toBe(YESTERDAY)
@@ -1600,7 +1600,7 @@ describe('Section 20 — Workout Rescheduling', () => {
     // workoutId was completed in Section 6
     const res = await request(app)
       .patch(`/api/v1/coach/workouts/${workoutId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ scheduled_date: TOMORROW })
     // COMPLETED workouts can still have their date changed (no explicit block in spec)
     // but status stays COMPLETED — verify the DB status doesn't revert
@@ -1612,7 +1612,7 @@ describe('Section 20 — Workout Rescheduling', () => {
   test('TC-RESCHEDULE-005 · PATCH with invalid date format returns 400', async () => {
     const res = await request(app)
       .patch(`/api/v1/coach/workouts/${rescheduleWorkoutId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ scheduled_date: '15/03/2026' })
     expect(res.status).toBe(400)
   })
@@ -1620,7 +1620,7 @@ describe('Section 20 — Workout Rescheduling', () => {
   test('TC-RESCHEDULE-006 · Coach 2 cannot reschedule Coach 1\'s workout', async () => {
     const res = await request(app)
       .patch(`/api/v1/coach/workouts/${rescheduleWorkoutId}`)
-      .set('Authorization', `Bearer ${coach2Token}`)
+      .set('Cookie', coach2Cookies)
       .send({ scheduled_date: TOMORROW })
     expect(res.status).toBe(404) // not found for this coach
   })
@@ -1634,7 +1634,7 @@ describe('Section 21 — Coach Cross-Access Isolation', () => {
 test('TC-CROSS-001 · Coach 2 cannot PATCH workout-exercise belonging to Coach 1', async () => {
     const res = await request(app)
       .patch(`/api/v1/coach/workout-exercises/${workoutExerciseId}`)
-      .set('Authorization', `Bearer ${coach2Token}`)
+      .set('Cookie', coach2Cookies)
       .send({ prescribed_sets: 5 }) // valid value — must fail on ownership, not validation
     expect(res.status).toBe(403)
     // DB unchanged
@@ -1646,13 +1646,13 @@ test('TC-CROSS-001 · Coach 2 cannot PATCH workout-exercise belonging to Coach 1
     // Need a fresh scheduled workout from coach 1
     const assign = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: TOMORROW, name: 'Cross_TEST_Delete' })
     const victimWorkoutId = assign.body.data.id
 
     const res = await request(app)
       .delete(`/api/v1/coach/workouts/${victimWorkoutId}`)
-      .set('Authorization', `Bearer ${coach2Token}`)
+      .set('Cookie', coach2Cookies)
     expect(res.status).toBe(404)
 
     // Row still exists in DB
@@ -1663,14 +1663,14 @@ test('TC-CROSS-001 · Coach 2 cannot PATCH workout-exercise belonging to Coach 1
   test('TC-CROSS-003 · Coach 2 cannot view Coach 1\'s template', async () => {
     const res = await request(app)
       .get(`/api/v1/coach/templates/${templateId}`)
-      .set('Authorization', `Bearer ${coach2Token}`)
+      .set('Cookie', coach2Cookies)
     expect(res.status).toBe(404)
   })
 
   test('TC-CROSS-004 · Coach 2 cannot comment on Coach 1\'s workout', async () => {
     const res = await request(app)
       .post(`/api/v1/coach/workouts/${workoutId}/comments`)
-      .set('Authorization', `Bearer ${coach2Token}`)
+      .set('Cookie', coach2Cookies)
       .send({ content: 'Intruder comment' })
     expect(res.status).toBe(404)
 
@@ -1685,7 +1685,7 @@ test('TC-CROSS-001 · Coach 2 cannot PATCH workout-exercise belonging to Coach 1
     // clientUserId is already linked to coach 1; coach 2 tries to steal them
     const res = await request(app)
       .post('/api/v1/coach/clients')
-      .set('Authorization', `Bearer ${coach2Token}`)
+      .set('Cookie', coach2Cookies)
       .send({ user_id: clientUserId })
     // client_profiles.user_id has UNIQUE constraint → conflict
     expect(res.status).toBe(409)
@@ -1695,7 +1695,7 @@ test('TC-CROSS-001 · Coach 2 cannot PATCH workout-exercise belonging to Coach 1
     // Duplicate name check is per-coach — coach 2 can use a name coach 1 already has
     const res = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coach2Token}`)
+      .set('Cookie', coach2Cookies)
       .send({ name: 'Lower Body Day Updated', exercises: [] })
     expect(res.status).toBe(201)
   })
@@ -1709,7 +1709,7 @@ describe('Section 22 — Progress Edge Cases', () => {
   test('TC-PROGRESS-004 · CUSTOM metric_type without metric_label returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/client/progress')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ metric_type: 'CUSTOM', value: 10, unit: 'cm', recorded_at: TODAY })
     expect(res.status).toBe(400)
     expect(res.body.error.code).toBe('VALIDATION_ERROR')
@@ -1718,7 +1718,7 @@ describe('Section 22 — Progress Edge Cases', () => {
   test('TC-PROGRESS-005 · CUSTOM metric_type with metric_label succeeds', async () => {
     const res = await request(app)
       .post('/api/v1/client/progress')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ metric_type: 'CUSTOM', metric_label: 'Neck', value: 40, unit: 'cm', recorded_at: TODAY })
     expect(res.status).toBe(201)
     expect(res.body.data.metric_label).toBe('Neck')
@@ -1728,7 +1728,7 @@ describe('Section 22 — Progress Edge Cases', () => {
   test('TC-PROGRESS-006 · Invalid metric_type returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/client/progress')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ metric_type: 'MUSCLE_MASS', value: 70, unit: 'kg', recorded_at: TODAY })
     expect(res.status).toBe(400)
   })
@@ -1736,7 +1736,7 @@ describe('Section 22 — Progress Edge Cases', () => {
   test('TC-PROGRESS-007 · Negative value returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/client/progress')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ metric_type: 'WEIGHT', value: -5, unit: 'kg', recorded_at: TODAY })
     expect(res.status).toBe(400)
   })
@@ -1744,7 +1744,7 @@ describe('Section 22 — Progress Edge Cases', () => {
   test('TC-PROGRESS-008 · Value at upper boundary (9999) is accepted', async () => {
     const res = await request(app)
       .post('/api/v1/client/progress')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ metric_type: 'WEIGHT', value: 9999, unit: 'kg', recorded_at: TODAY })
     expect(res.status).toBe(201)
   })
@@ -1752,7 +1752,7 @@ describe('Section 22 — Progress Edge Cases', () => {
   test('TC-PROGRESS-009 · Value above upper boundary (10000) returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/client/progress')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ metric_type: 'WEIGHT', value: 10000, unit: 'kg', recorded_at: TODAY })
     expect(res.status).toBe(400)
   })
@@ -1761,12 +1761,12 @@ describe('Section 22 — Progress Edge Cases', () => {
     // Log one entry in the past
     await request(app)
       .post('/api/v1/client/progress')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ metric_type: 'BODY_FAT', value: 15, unit: '%', recorded_at: YESTERDAY })
 
     const res = await request(app)
       .get(`/api/v1/client/progress?metric_type=BODY_FAT&from=${TODAY}&to=${TODAY}`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(res.status).toBe(200)
     // YESTERDAY entry must not appear
     res.body.data.forEach(p => {
@@ -1778,7 +1778,7 @@ describe('Section 22 — Progress Edge Cases', () => {
   test('TC-PROGRESS-011 · Missing unit returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/client/progress')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ metric_type: 'WEIGHT', value: 80, recorded_at: TODAY })
     expect(res.status).toBe(400)
   })
@@ -1786,7 +1786,7 @@ describe('Section 22 — Progress Edge Cases', () => {
   test('TC-PROGRESS-012 · Coach cannot log client progress directly', async () => {
     const res = await request(app)
       .post('/api/v1/client/progress')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ metric_type: 'WEIGHT', value: 80, unit: 'kg', recorded_at: TODAY })
     expect(res.status).toBe(403)
   })
@@ -1800,7 +1800,7 @@ describe('Section 23 — Messaging Edge Cases', () => {
   test('TC-MSG-004 · Empty message content returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/messages/send')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ thread_id: threadId, content: '' })
     expect(res.status).toBe(400)
     expect(res.body.error.code).toBe('VALIDATION_ERROR')
@@ -1809,7 +1809,7 @@ describe('Section 23 — Messaging Edge Cases', () => {
   test('TC-MSG-005 · Whitespace-only message content returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/messages/send')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ thread_id: threadId, content: '   \t\n  ' })
     expect(res.status).toBe(400)
   })
@@ -1817,7 +1817,7 @@ describe('Section 23 — Messaging Edge Cases', () => {
   test('TC-MSG-006 · Invalid thread UUID returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/messages/send')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ thread_id: 'not-a-uuid', content: 'Hello' })
     expect(res.status).toBe(400)
   })
@@ -1825,7 +1825,7 @@ describe('Section 23 — Messaging Edge Cases', () => {
   test('TC-MSG-007 · Non-existent thread UUID returns 404', async () => {
     const res = await request(app)
       .post('/api/v1/messages/send')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ thread_id: '00000000-0000-4000-8000-000000000099', content: 'Hello' })
     expect(res.status).toBe(404)
   })
@@ -1834,12 +1834,12 @@ describe('Section 23 — Messaging Edge Cases', () => {
     // Send a second message so there are 2
     await request(app)
       .post('/api/v1/messages/send')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ thread_id: threadId, content: 'Reply from client' })
 
     const res = await request(app)
       .get(`/api/v1/messages/threads/${threadId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.data)).toBe(true)
     expect(res.body.data.length).toBeGreaterThanOrEqual(2)
@@ -1852,7 +1852,7 @@ describe('Section 23 — Messaging Edge Cases', () => {
   test('TC-MSG-009 · Thread detail with invalid cursor UUID is ignored gracefully', async () => {
     const res = await request(app)
       .get(`/api/v1/messages/threads/${threadId}?cursor=not-a-uuid`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     // Invalid cursor should be ignored — still returns messages
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.data)).toBe(true)
@@ -1873,7 +1873,7 @@ describe('Section 24 — Exercise Ownership Enforcement', () => {
   test('TC-EX-OWNER-001 · Coach 2 creates their own exercise', async () => {
     const res = await request(app)
       .post('/api/v1/exercises')
-      .set('Authorization', `Bearer ${coach2Token}`)
+      .set('Cookie', coach2Cookies)
       .send({ name: 'Coach2_TEST_BenchPress' })
     expect(res.status).toBe(201)
     coach2ExerciseId = res.body.data.id
@@ -1882,7 +1882,7 @@ describe('Section 24 — Exercise Ownership Enforcement', () => {
   test('TC-EX-OWNER-002 · Coach 1 cannot PATCH Coach 2\'s exercise', async () => {
     const res = await request(app)
       .patch(`/api/v1/exercises/${coach2ExerciseId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ name: 'Stolen_TEST_Exercise' })
     expect(res.status).toBe(403)
     const { rows } = await testPool.query('SELECT name FROM exercises WHERE id=$1', [coach2ExerciseId])
@@ -1892,7 +1892,7 @@ describe('Section 24 — Exercise Ownership Enforcement', () => {
   test('TC-EX-OWNER-003 · Coach 1 cannot DELETE Coach 2\'s exercise', async () => {
     const res = await request(app)
       .delete(`/api/v1/exercises/${coach2ExerciseId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(403)
     const { rows } = await testPool.query('SELECT id FROM exercises WHERE id=$1', [coach2ExerciseId])
     expect(rows).toHaveLength(1) // still exists
@@ -1901,7 +1901,7 @@ describe('Section 24 — Exercise Ownership Enforcement', () => {
   test('TC-EX-OWNER-004 · Coach 2 can PATCH their own exercise', async () => {
     const res = await request(app)
       .patch(`/api/v1/exercises/${coach2ExerciseId}`)
-      .set('Authorization', `Bearer ${coach2Token}`)
+      .set('Cookie', coach2Cookies)
       .send({ name: 'Coach2_TEST_BenchPress_Updated' })
     expect(res.status).toBe(200)
     expect(res.body.data.name).toBe('Coach2_TEST_BenchPress_Updated')
@@ -1910,7 +1910,7 @@ describe('Section 24 — Exercise Ownership Enforcement', () => {
   test('TC-EX-OWNER-005 · Coach 2 can DELETE their own exercise', async () => {
     const res = await request(app)
       .delete(`/api/v1/exercises/${coach2ExerciseId}`)
-      .set('Authorization', `Bearer ${coach2Token}`)
+      .set('Cookie', coach2Cookies)
     expect(res.status).toBe(200)
     const { rows } = await testPool.query('SELECT id FROM exercises WHERE id=$1', [coach2ExerciseId])
     expect(rows).toHaveLength(0)
@@ -1919,14 +1919,14 @@ describe('Section 24 — Exercise Ownership Enforcement', () => {
   test('TC-EX-OWNER-006 · GET /exercises/:id — non-existent UUID returns 404', async () => {
     const res = await request(app)
       .get('/api/v1/exercises/00000000-0000-4000-8000-000000000099')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(404)
   })
 
   test('TC-EX-OWNER-007 · GET /exercises/:id — malformed UUID returns 404', async () => {
     const res = await request(app)
       .get('/api/v1/exercises/not-a-uuid')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(404)
   })
 })
@@ -1940,7 +1940,7 @@ describe('Section 25 — Input Validation & Injection Hardening', () => {
   test('TC-INPUT-001 · Template name with control characters returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ name: 'Bad\x01Name', exercises: [] })
     expect(res.status).toBe(400)
   })
@@ -1948,7 +1948,7 @@ describe('Section 25 — Input Validation & Injection Hardening', () => {
   test('TC-INPUT-002 · Template name exceeding 200 chars returns 400', async () => {
     const res = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ name: 'A'.repeat(201), exercises: [] })
     expect(res.status).toBe(400)
   })
@@ -1957,7 +1957,7 @@ describe('Section 25 — Input Validation & Injection Hardening', () => {
     const malicious = "Robert'); DROP TABLE users;--"
     const res = await request(app)
       .post('/api/v1/exercises')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ name: malicious + '_TEST' })
     expect(res.status).toBe(201)
     // users table must still exist
@@ -1974,7 +1974,7 @@ describe('Section 25 — Input Validation & Injection Hardening', () => {
     const xss = '<script>alert("xss")</script>'
     const res = await request(app)
       .post(`/api/v1/coach/workouts/${workoutId}/comments`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ content: xss })
     expect(res.status).toBe(201)
     // Value stored as-is — sanitization is the frontend's job; backend must not crash
@@ -1987,7 +1987,7 @@ describe('Section 25 — Input Validation & Injection Hardening', () => {
   test('TC-INPUT-005 · Workout log with out-of-range rating (6) returns 400', async () => {
     const res = await request(app)
       .post(`/api/v1/client/workouts/${workoutId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ rating: 6, exercise_logs: [] })
     expect(res.status).toBe(400)
   })
@@ -1995,7 +1995,7 @@ describe('Section 25 — Input Validation & Injection Hardening', () => {
   test('TC-INPUT-006 · Workout log with rating 0 returns 400 (min is 1)', async () => {
     const res = await request(app)
       .post(`/api/v1/client/workouts/${workoutId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ rating: 0, exercise_logs: [] })
     expect(res.status).toBe(400)
   })
@@ -2003,7 +2003,7 @@ describe('Section 25 — Input Validation & Injection Hardening', () => {
   test('TC-INPUT-007 · Workout log with RPE out of range (11) returns 400', async () => {
     const res = await request(app)
       .post(`/api/v1/client/workouts/${workoutId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({
         exercise_logs: [{
           workout_exercise_id: workoutExerciseId,
@@ -2042,7 +2042,7 @@ describe('Section 25 — Input Validation & Injection Hardening', () => {
     // enforce this server-side; it is a UX constraint only. Empty templates are valid DB rows.
     const res = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ name: 'Empty_TEST_Template', exercises: [] })
     expect(res.status).toBe(201)
   })
@@ -2057,13 +2057,13 @@ describe('Section 26 — Workout Log Edge Cases', () => {
   test('TC-WLOG-001 · Coach can mark a SCHEDULED workout as MISSED', async () => {
     const assign = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: YESTERDAY, name: 'Missed_TEST' })
     missedWorkoutId = assign.body.data.id
 
     const res = await request(app)
       .patch(`/api/v1/coach/workouts/${missedWorkoutId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ status: 'MISSED' })
     expect(res.status).toBe(200)
     expect(res.body.data.status).toBe('MISSED')
@@ -2077,7 +2077,7 @@ describe('Section 26 — Workout Log Edge Cases', () => {
     const { rows: we } = await testPool.query('SELECT id FROM workout_exercises WHERE workout_id=$1', [missedWorkoutId])
     const res = await request(app)
       .post(`/api/v1/client/workouts/${missedWorkoutId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({
         overall_notes: 'Did it late',
         exercise_logs: [{ workout_exercise_id: we[0].id, actual_sets: 2 }],
@@ -2092,14 +2092,14 @@ describe('Section 26 — Workout Log Edge Cases', () => {
     // Assign a fresh workout so it's SCHEDULED (not yet logged)
     const assign = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: TODAY, name: 'FKTest_TEST' })
     logOnlyWorkoutId = assign.body.data.id
 
     // Use an exercise_id from a completely different workout
     const res = await request(app)
       .post(`/api/v1/client/workouts/${logOnlyWorkoutId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({
         exercise_logs: [{
           workout_exercise_id: workoutExerciseId, // belongs to workoutId, not logOnlyWorkoutId
@@ -2113,13 +2113,13 @@ describe('Section 26 — Workout Log Edge Cases', () => {
   test('TC-WLOG-004 · Log with no exercise_logs only updates workout-level fields', async () => {
     const assign = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: TODAY, name: 'NoEx_TEST' })
     const noExWorkoutId = assign.body.data.id
 
     const res = await request(app)
       .post(`/api/v1/client/workouts/${noExWorkoutId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ rating: 3, overall_notes: 'Header only', exercise_logs: [] })
     expect(res.status).toBe(201)
 
@@ -2136,7 +2136,7 @@ describe('Section 26 — Workout Log Edge Cases', () => {
 
     await request(app)
       .post(`/api/v1/client/workouts/${workoutId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ rating: 5, exercise_logs: [] })
 
     const { rows: after } = await testPool.query('SELECT COUNT(*) FROM exercise_logs WHERE workout_log_id=$1', [workoutLogId])
@@ -2147,13 +2147,13 @@ describe('Section 26 — Workout Log Edge Cases', () => {
   test('TC-WLOG-006 · Coach cannot submit a workout log on behalf of client', async () => {
     const assign = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: TOMORROW, name: 'CoachLog_TEST' })
     const coachLogId = assign.body.data.id
 
     const res = await request(app)
       .post(`/api/v1/client/workouts/${coachLogId}/log`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ exercise_logs: [] })
     expect(res.status).toBe(403)
   })
@@ -2168,7 +2168,7 @@ describe('Section 27 — Notifications API', () => {
   test('TC-NOTIF-API-001 · GET /client/notifications returns unread notifications', async () => {
     const res = await request(app)
       .get('/api/v1/client/notifications')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.data)).toBe(true)
     // All returned rows must be unread
@@ -2181,18 +2181,18 @@ describe('Section 27 — Notifications API', () => {
   test('TC-NOTIF-API-002 · GET /client/notifications?all=true returns all (including read)', async () => {
     const res = await request(app)
       .get('/api/v1/client/notifications?all=true')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(res.status).toBe(200)
     expect(res.body.data.length).toBeGreaterThanOrEqual(
       // At minimum the same as unread count
-      (await request(app).get('/api/v1/client/notifications').set('Authorization', `Bearer ${clientToken}`)).body.data.length
+      (await request(app).get('/api/v1/client/notifications').set('Cookie', clientCookies)).body.data.length
     )
   })
 
   test('TC-NOTIF-API-003 · PATCH /client/notifications/read-all marks all unread as read', async () => {
     const res = await request(app)
       .patch('/api/v1/client/notifications/read-all')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(res.status).toBe(200)
     expect(typeof res.body.data.marked_read).toBe('number')
     expect(res.body.data.marked_read).toBeGreaterThan(0)
@@ -2208,7 +2208,7 @@ describe('Section 27 — Notifications API', () => {
     // All were just marked read above
     const res = await request(app)
       .patch('/api/v1/client/notifications/read-all')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(res.status).toBe(200)
     expect(res.body.data.marked_read).toBe(0)
   })
@@ -2217,20 +2217,20 @@ describe('Section 27 — Notifications API', () => {
     // First create a new notification for the client by assigning a new workout
     const assign = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: TOMORROW, name: 'NotifRead_TEST' })
     expect(assign.status).toBe(201)
 
     // Fetch unread notifications
     const listRes = await request(app)
       .get('/api/v1/client/notifications')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(listRes.body.data.length).toBeGreaterThan(0)
     const targetId = listRes.body.data[0].id
 
     const res = await request(app)
       .patch(`/api/v1/client/notifications/${targetId}/read`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(res.status).toBe(200)
     expect(res.body.data.is_read).toBe(true)
 
@@ -2248,14 +2248,14 @@ describe('Section 27 — Notifications API', () => {
 
     const res = await request(app)
       .patch(`/api/v1/client/notifications/${coachNotifId}/read`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(res.status).toBe(404) // not found for this user
   })
 
   test('TC-NOTIF-API-007 · Coach cannot access /client/notifications endpoint', async () => {
     const res = await request(app)
       .get('/api/v1/client/notifications')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(403)
   })
 
@@ -2275,7 +2275,7 @@ describe('Section 28 — History List Integrity', () => {
     // workoutId was logged as COMPLETED in TC-LOG-001
     const res = await request(app)
       .get('/api/v1/client/workouts')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.data)).toBe(true)
     const found = res.body.data.find(w => w.id === workoutId)
@@ -2291,11 +2291,11 @@ describe('Section 28 — History List Integrity', () => {
     const login = await request(app)
       .post('/api/v1/auth/login')
       .send({ email: 'history_unlinked_test@example.com', password: 'TestPassword123' })
-    const unlinkedToken = login.body.data.token
+    const unlinkedCookies = login.headers['set-cookie']
 
     const res = await request(app)
       .get('/api/v1/client/workouts')
-      .set('Authorization', `Bearer ${unlinkedToken}`)
+      .set('Cookie', unlinkedCookies)
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.data)).toBe(true)
     expect(res.body.data).toHaveLength(0)
@@ -2312,7 +2312,7 @@ describe('Section 29 — Optional Prescription Fields & No Muscle Groups', () =>
   test('TC-OPT-001 · Template exercise without prescribed_sets or prescribed_reps succeeds', async () => {
     const res = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         name: 'Optional_TEST_Sets',
         exercises: [{
@@ -2336,7 +2336,7 @@ describe('Section 29 — Optional Prescription Fields & No Muscle Groups', () =>
   test('TC-OPT-002 · Template exercise with only prescribed_sets (no reps) succeeds', async () => {
     const res = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         name: 'SetsOnly_TEST',
         exercises: [{
@@ -2357,7 +2357,7 @@ describe('Section 29 — Optional Prescription Fields & No Muscle Groups', () =>
   test('TC-OPT-003 · Template exercise with only prescribed_reps (no sets) succeeds', async () => {
     const res = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         name: 'RepsOnly_TEST',
         exercises: [{
@@ -2379,7 +2379,7 @@ describe('Section 29 — Optional Prescription Fields & No Muscle Groups', () =>
     // Create template with no sets/reps
     const tmpl = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         name: 'NoSetsReps_TEST',
         exercises: [{ exercise_id: exerciseId }],
@@ -2388,7 +2388,7 @@ describe('Section 29 — Optional Prescription Fields & No Muscle Groups', () =>
 
     const assign = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ template_id: tmpl.body.data.id, client_id: clientProfileId, scheduled_date: TOMORROW })
     expect(assign.status).toBe(201)
 
@@ -2405,7 +2405,7 @@ describe('Section 29 — Optional Prescription Fields & No Muscle Groups', () =>
     // The workout from TC-OPT-004 was scheduled for TOMORROW, so it will show in upcoming
     const res = await request(app)
       .get('/api/v1/client/workouts/upcoming')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
     expect(res.status).toBe(200)
     // Find a workout whose exercises have null prescribed_sets
     const withNullSets = res.body.data.find(w =>
@@ -2417,7 +2417,7 @@ describe('Section 29 — Optional Prescription Fields & No Muscle Groups', () =>
   test('TC-OPT-006 · Exercise has no primary_muscle_group field in response', async () => {
     const res = await request(app)
       .get(`/api/v1/exercises/${exerciseId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(200)
     expect(res.body.data.primary_muscle_group).toBeUndefined()
     expect(res.body.data.secondary_muscle_groups).toBeUndefined()
@@ -2426,7 +2426,7 @@ describe('Section 29 — Optional Prescription Fields & No Muscle Groups', () =>
   test('TC-OPT-007 · Creating exercise with primary_muscle_group field ignores it (field not stored)', async () => {
     const res = await request(app)
       .post('/api/v1/exercises')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         name: 'MuscleGroup_TEST_Ignored',
         primary_muscle_group: 'Legs',  // extra field — should be ignored, not error
@@ -2440,7 +2440,7 @@ describe('Section 29 — Optional Prescription Fields & No Muscle Groups', () =>
   test('TC-OPT-008 · Exercise list does not include muscle group fields', async () => {
     const res = await request(app)
       .get('/api/v1/exercises')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
     expect(res.status).toBe(200)
     expect(res.body.data.length).toBeGreaterThan(0)
     res.body.data.forEach(e => {
@@ -2464,7 +2464,7 @@ describe('Section 29 — Optional Prescription Fields & No Muscle Groups', () =>
 //   - Future workout is NOT in today's list; IS in upcoming list
 // =============================================================================
 describe('Section 30 — E2E Lifecycle: Full Workout Flow with Fresh Users', () => {
-  let e2eCoachToken, e2eClientToken
+  let e2eCoachCookies, e2eClientCookies
   let e2eClientProfileId
   let e2eExerciseId, e2eTemplateId
   let e2eTodayWorkoutId, e2eTodayWorkoutExerciseId
@@ -2483,7 +2483,7 @@ describe('Section 30 — E2E Lifecycle: Full Workout Flow with Fresh Users', () 
       .send({ email: E2E_COACH_EMAIL, password: E2E_PASS, role: 'COACH', first_name: 'E2E', last_name: 'Coach' })
     expect(res.status).toBe(201)
     expect(res.body.data.user.role).toBe('COACH')
-    e2eCoachToken = res.body.data.token
+    e2eCoachCookies = res.headers['set-cookie']
   })
 
   test('TC-E2E-002 · Register new client', async () => {
@@ -2492,13 +2492,13 @@ describe('Section 30 — E2E Lifecycle: Full Workout Flow with Fresh Users', () 
       .send({ email: E2E_CLIENT_EMAIL, password: E2E_PASS, role: 'CLIENT', first_name: 'E2E', last_name: 'Client' })
     expect(res.status).toBe(201)
     expect(res.body.data.user.role).toBe('CLIENT')
-    e2eClientToken = res.body.data.token
+    e2eClientCookies = res.headers['set-cookie']
     const clientUserId = res.body.data.user.id
 
     // Coach links the client
     const link = await request(app)
       .post('/api/v1/coach/clients')
-      .set('Authorization', `Bearer ${e2eCoachToken}`)
+      .set('Cookie', e2eCoachCookies)
       .send({ user_id: clientUserId })
     expect(link.status).toBe(201)
     e2eClientProfileId = link.body.data.id
@@ -2513,14 +2513,14 @@ describe('Section 30 — E2E Lifecycle: Full Workout Flow with Fresh Users', () 
   test('TC-E2E-003 · Coach creates exercise and template', async () => {
     const exRes = await request(app)
       .post('/api/v1/exercises')
-      .set('Authorization', `Bearer ${e2eCoachToken}`)
+      .set('Cookie', e2eCoachCookies)
       .send({ name: 'E2E_Bench_Press_test', is_public: false })
     expect(exRes.status).toBe(201)
     e2eExerciseId = exRes.body.data.id
 
     const tmplRes = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${e2eCoachToken}`)
+      .set('Cookie', e2eCoachCookies)
       .send({
         name: 'E2E Push Day',
         exercises: [{
@@ -2541,7 +2541,7 @@ describe('Section 30 — E2E Lifecycle: Full Workout Flow with Fresh Users', () 
   test('TC-E2E-004 · Coach assigns workout for today', async () => {
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${e2eCoachToken}`)
+      .set('Cookie', e2eCoachCookies)
       .send({
         template_id: e2eTemplateId,
         client_id: e2eClientProfileId,
@@ -2573,7 +2573,7 @@ describe('Section 30 — E2E Lifecycle: Full Workout Flow with Fresh Users', () 
   test('TC-E2E-005 · Client sees today\'s workout with full exercise details', async () => {
     const res = await request(app)
       .get('/api/v1/client/workouts/today')
-      .set('Authorization', `Bearer ${e2eClientToken}`)
+      .set('Cookie', e2eClientCookies)
     expect(res.status).toBe(200)
     const workout = res.body.data.find(w => w.id === e2eTodayWorkoutId)
     expect(workout).toBeTruthy()
@@ -2588,7 +2588,7 @@ describe('Section 30 — E2E Lifecycle: Full Workout Flow with Fresh Users', () 
   test('TC-E2E-006 · Client logs workout with per-set data', async () => {
     const res = await request(app)
       .post(`/api/v1/client/workouts/${e2eTodayWorkoutId}/log`)
-      .set('Authorization', `Bearer ${e2eClientToken}`)
+      .set('Cookie', e2eClientCookies)
       .send({
         overall_notes: 'Felt strong',
         rating: 4,
@@ -2639,7 +2639,7 @@ describe('Section 30 — E2E Lifecycle: Full Workout Flow with Fresh Users', () 
   test('TC-E2E-007 · Workout appears in client history with COMPLETED status', async () => {
     const res = await request(app)
       .get('/api/v1/client/workouts/past')
-      .set('Authorization', `Bearer ${e2eClientToken}`)
+      .set('Cookie', e2eClientCookies)
     expect(res.status).toBe(200)
     const w = res.body.data.find(w => w.id === e2eTodayWorkoutId)
     expect(w).toBeTruthy()
@@ -2649,7 +2649,7 @@ describe('Section 30 — E2E Lifecycle: Full Workout Flow with Fresh Users', () 
   test('TC-E2E-008 · Client views completed workout — logged set data matches', async () => {
     const res = await request(app)
       .get(`/api/v1/client/workouts/${e2eTodayWorkoutId}`)
-      .set('Authorization', `Bearer ${e2eClientToken}`)
+      .set('Cookie', e2eClientCookies)
     expect(res.status).toBe(200)
 
     const workout = res.body.data
@@ -2673,7 +2673,7 @@ describe('Section 30 — E2E Lifecycle: Full Workout Flow with Fresh Users', () 
   test('TC-E2E-009 · Coach assigns workout for a future date', async () => {
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${e2eCoachToken}`)
+      .set('Cookie', e2eCoachCookies)
       .send({
         template_id: e2eTemplateId,
         client_id: e2eClientProfileId,
@@ -2699,7 +2699,7 @@ describe('Section 30 — E2E Lifecycle: Full Workout Flow with Fresh Users', () 
   test('TC-E2E-010 · Future workout NOT in today\'s list', async () => {
     const res = await request(app)
       .get('/api/v1/client/workouts/today')
-      .set('Authorization', `Bearer ${e2eClientToken}`)
+      .set('Cookie', e2eClientCookies)
     expect(res.status).toBe(200)
     expect(res.body.data.find(w => w.id === e2eFutureWorkoutId)).toBeFalsy()
   })
@@ -2707,7 +2707,7 @@ describe('Section 30 — E2E Lifecycle: Full Workout Flow with Fresh Users', () 
   test('TC-E2E-011 · Future workout IS in upcoming list with full exercise details', async () => {
     const res = await request(app)
       .get('/api/v1/client/workouts/upcoming')
-      .set('Authorization', `Bearer ${e2eClientToken}`)
+      .set('Cookie', e2eClientCookies)
     expect(res.status).toBe(200)
 
     const w = res.body.data.find(w => w.id === e2eFutureWorkoutId)
@@ -2729,7 +2729,7 @@ describe('Section 30 — E2E Lifecycle: Full Workout Flow with Fresh Users', () 
   test('TC-E2E-012 · Future workout detail endpoint returns full prescription; status still SCHEDULED', async () => {
     const res = await request(app)
       .get(`/api/v1/client/workouts/${e2eFutureWorkoutId}`)
-      .set('Authorization', `Bearer ${e2eClientToken}`)
+      .set('Cookie', e2eClientCookies)
     expect(res.status).toBe(200)
 
     const workout = res.body.data
@@ -2761,7 +2761,7 @@ describe('Section 31 — YouTube URL & is_public Toggle on Exercises', () => {
   test('TC-YT-001 · Coach creates exercise with youtube_url — stored in DB', async () => {
     const res = await request(app)
       .post('/api/v1/exercises')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         name: 'YT_Demo_Exercise_test',
         description: 'Has a demo video',
@@ -2780,7 +2780,7 @@ describe('Section 31 — YouTube URL & is_public Toggle on Exercises', () => {
   test('TC-YT-002 · GET /exercises list includes youtube_url field', async () => {
     const res = await request(app)
       .get('/api/v1/exercises')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
 
     expect(res.status).toBe(200)
     const ex = res.body.data.find(e => e.id === ytExerciseId)
@@ -2792,7 +2792,7 @@ describe('Section 31 — YouTube URL & is_public Toggle on Exercises', () => {
     const newUrl = 'https://youtu.be/dQw4w9WgXcQ'
     const res = await request(app)
       .patch(`/api/v1/exercises/${ytExerciseId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ youtube_url: newUrl })
 
     expect(res.status).toBe(200)
@@ -2805,7 +2805,7 @@ describe('Section 31 — YouTube URL & is_public Toggle on Exercises', () => {
   test('TC-YT-004 · PATCH exercise toggles is_public from false to true', async () => {
     const res = await request(app)
       .patch(`/api/v1/exercises/${ytExerciseId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ is_public: true })
 
     expect(res.status).toBe(200)
@@ -2818,7 +2818,7 @@ describe('Section 31 — YouTube URL & is_public Toggle on Exercises', () => {
   test('TC-YT-005 · PATCH exercise toggles is_public back to false', async () => {
     const res = await request(app)
       .patch(`/api/v1/exercises/${ytExerciseId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({ is_public: false })
 
     expect(res.status).toBe(200)
@@ -2832,7 +2832,7 @@ describe('Section 31 — YouTube URL & is_public Toggle on Exercises', () => {
     // Assign a workout using ytExerciseId so it goes through attachExercises
     const assignRes = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         template_id: templateId,
         client_id: clientProfileId,
@@ -2849,7 +2849,7 @@ describe('Section 31 — YouTube URL & is_public Toggle on Exercises', () => {
 
     const res = await request(app)
       .get(`/api/v1/client/workouts/${ytWorkoutId}`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
 
     expect(res.status).toBe(200)
     expect(res.body.data.exercises).toHaveLength(1)
@@ -2860,7 +2860,7 @@ describe('Section 31 — YouTube URL & is_public Toggle on Exercises', () => {
   test('TC-YT-007 · Client cannot PATCH an exercise (403)', async () => {
     const res = await request(app)
       .patch(`/api/v1/exercises/${ytExerciseId}`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({ is_public: true })
 
     expect(res.status).toBe(403)
@@ -2879,7 +2879,7 @@ describe('Section 32 — log_bilateral Flag', () => {
   test('TC-BILATERAL-001 · log_bilateral=true is stored on workout_exercises', async () => {
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         template_id: templateId,
         client_id: clientProfileId,
@@ -2908,7 +2908,7 @@ describe('Section 32 — log_bilateral Flag', () => {
   test('TC-BILATERAL-002 · log_bilateral returned in client workout detail', async () => {
     const res = await request(app)
       .get(`/api/v1/client/workouts/${bilateralWorkoutId}`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
 
     expect(res.status).toBe(200)
     expect(res.body.data.exercises).toHaveLength(1)
@@ -2919,7 +2919,7 @@ describe('Section 32 — log_bilateral Flag', () => {
     // Assign a bilateral workout for today to verify it also comes through today endpoint
     const assignRes = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         template_id: templateId,
         client_id: clientProfileId,
@@ -2937,7 +2937,7 @@ describe('Section 32 — log_bilateral Flag', () => {
 
     const res = await request(app)
       .get('/api/v1/client/workouts/today')
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
 
     expect(res.status).toBe(200)
     const w = res.body.data.find(w => w.id === bilateralTodayId)
@@ -2948,7 +2948,7 @@ describe('Section 32 — log_bilateral Flag', () => {
   test('TC-BILATERAL-004 · log_weight and log_bilateral can both be true simultaneously', async () => {
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         template_id: templateId,
         client_id: clientProfileId,
@@ -2974,7 +2974,7 @@ describe('Section 32 — log_bilateral Flag', () => {
   test('TC-BILATERAL-005 · log_bilateral defaults to false when not supplied', async () => {
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         template_id: templateId,
         client_id: clientProfileId,
@@ -3007,7 +3007,7 @@ describe('Section 33 — Warmup / Cooldown Sections', () => {
   test('TC-SECTION-001 · Coach creates template with WARMUP, MAIN, and COOLDOWN exercises', async () => {
     const res = await request(app)
       .post('/api/v1/coach/templates')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         name: 'Section_TEST_Template',
         exercises: [
@@ -3035,7 +3035,7 @@ describe('Section 33 — Warmup / Cooldown Sections', () => {
   test('TC-SECTION-002 · Template GET returns section on each exercise', async () => {
     const res = await request(app)
       .get(`/api/v1/coach/templates/${sectionTemplateId}`)
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
 
     expect(res.status).toBe(200)
     const exs = res.body.data.exercises
@@ -3048,7 +3048,7 @@ describe('Section 33 — Warmup / Cooldown Sections', () => {
   test('TC-SECTION-003 · Assignment stores section on workout_exercises', async () => {
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         template_id: sectionTemplateId,
         client_id: clientProfileId,
@@ -3083,7 +3083,7 @@ describe('Section 33 — Warmup / Cooldown Sections', () => {
   test('TC-SECTION-004 · Client workout detail includes section on each exercise', async () => {
     const res = await request(app)
       .get(`/api/v1/client/workouts/${sectionWorkoutId}`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
 
     expect(res.status).toBe(200)
     const exs = res.body.data.exercises
@@ -3096,7 +3096,7 @@ describe('Section 33 — Warmup / Cooldown Sections', () => {
   test('TC-SECTION-005 · Logging only the MAIN exercise succeeds; warmup/cooldown have no log entry', async () => {
     const res = await request(app)
       .post(`/api/v1/client/workouts/${sectionWorkoutId}/log`)
-      .set('Authorization', `Bearer ${clientToken}`)
+      .set('Cookie', clientCookies)
       .send({
         exercise_logs: [{
           workout_exercise_id: sectionWorkoutExId,
@@ -3123,7 +3123,7 @@ describe('Section 33 — Warmup / Cooldown Sections', () => {
   test('TC-SECTION-006 · section defaults to MAIN when not supplied in assignment', async () => {
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         template_id: templateId,
         client_id: clientProfileId,
@@ -3142,7 +3142,7 @@ describe('Section 33 — Warmup / Cooldown Sections', () => {
   test('TC-SECTION-007 · invalid section value is rejected with 400', async () => {
     const res = await request(app)
       .post('/api/v1/coach/workouts/assign')
-      .set('Authorization', `Bearer ${coachToken}`)
+      .set('Cookie', coachCookies)
       .send({
         template_id: templateId,
         client_id: clientProfileId,

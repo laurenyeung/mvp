@@ -1,7 +1,9 @@
 import 'dotenv/config'
+import { randomUUID } from 'crypto'
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
+import cookieParser from 'cookie-parser'
 
 import { logger } from './lib/logger.js'
 import { apiLimiter } from './middleware/rateLimiter.js'
@@ -30,6 +32,18 @@ const app  = express()
 const PORT = process.env.PORT || 4000
 const IS_PROD = process.env.NODE_ENV === 'production'
 
+// ─── Request ID ──────────────────────────────────────────────────────────────
+// Attach a UUID to every request so all log lines for one request can be correlated.
+// Exposed as X-Request-Id so clients/tests can reference it too.
+app.use((req, res, next) => {
+  req.id = randomUUID()
+  res.setHeader('X-Request-Id', req.id)
+  next()
+})
+
+// ─── Cookie parsing ───────────────────────────────────────────────────────────
+app.use(cookieParser())
+
 // ─── Security headers ─────────────────────────────────────────────────────────
 app.use(helmet())
 
@@ -38,6 +52,13 @@ const ALLOWED_ORIGINS = IS_PROD
   ? (process.env.ALLOWED_ORIGINS ?? '').split(',').map(o => o.trim()).filter(Boolean)
   : ['http://localhost:3000']
 
+if (IS_PROD && ALLOWED_ORIGINS.length === 0) {
+  console.error('❌  ALLOWED_ORIGINS is required in production.')
+  console.error('    Set it to your Vercel domain(s), e.g.: https://your-app.vercel.app')
+  console.error('    On Fly.io: fly secrets set ALLOWED_ORIGINS="https://your-app.vercel.app"')
+  process.exit(1)
+}
+
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true)
@@ -45,7 +66,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type'],
 }))
 
 // ─── Body parsing ─────────────────────────────────────────────────────────────
@@ -65,12 +86,13 @@ app.use((req, _res, next) => {
   _res.on('finish', () => {
     if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method)) {
       logger.info('REQUEST', {
-        method:  req.method,
-        path:    req.path,
-        status:  _res.statusCode,
-        ms:      Date.now() - start,
-        userId:  req.user?.id ?? null,
-        ip:      req.ip,
+        method:     req.method,
+        path:       req.path,
+        status:     _res.statusCode,
+        ms:         Date.now() - start,
+        userId:     req.user?.id ?? null,
+        ip:         req.ip,
+        requestId:  req.id,
       })
     }
   })
@@ -103,8 +125,7 @@ app.use((err, _req, res, _next) => {
     return res.status(status).json({ error: { code, message: err.message, stack: err.stack } })
   }
 
-  logger.error('UNHANDLED_ERROR', { code, message: err.message, status })
-  console.error(`[${new Date().toISOString()}] ${code}: ${err.message}`)
+  logger.error('UNHANDLED_ERROR', { err, code, status, requestId: _req.id })
   const message = status < 500 ? err.message : 'Something went wrong'
   res.status(status).json({ error: { code, message } })
 })
@@ -112,7 +133,7 @@ app.use((err, _req, res, _next) => {
 // ─── Only bind port when run directly, not when imported by tests ─────────────
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
-    console.log(`🚀  Server running on http://localhost:${PORT}`)
+    console.log(`🚀  Server running on port ${PORT}`)
     console.log(`    Environment: ${process.env.NODE_ENV ?? 'development'}`)
     logger.info('SERVER_START', { port: PORT, env: process.env.NODE_ENV ?? 'development' })
   })

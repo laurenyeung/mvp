@@ -20,8 +20,8 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const res = await authApi.login(data)
-      const { user, token } = res.data.data
-      setAuth(user, token)
+      const { user } = res.data.data
+      setAuth(user)
       navigate('/')
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Login failed. Check your credentials.')

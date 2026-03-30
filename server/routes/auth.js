@@ -5,8 +5,22 @@ import { query } from '../db/pool.js'
 import { requireAuth } from '../middleware/auth.js'
 import { authLimiter } from '../middleware/rateLimiter.js'
 import { registerSchema, loginSchema } from '../middleware/validate.js'
+import { logger } from '../lib/logger.js'
 
 const router = Router()
+const IS_PROD = process.env.NODE_ENV === 'production'
+
+// Cookie options for the JWT.
+// SameSite must be 'none' in production because the frontend (Vercel) and
+// backend (Fly.io) are on different domains — 'strict'/'lax' would silently
+// drop cookies on cross-origin XHR. In dev, Vite proxies /api making
+// requests same-origin, so 'lax' is fine and avoids the need for HTTPS.
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure:   IS_PROD,           // required when sameSite='none'
+  sameSite: IS_PROD ? 'none' : 'lax',
+  maxAge:   7 * 24 * 60 * 60 * 1000, // 7 days — matches JWT_EXPIRES_IN
+}
 
 function signToken(user) {
   return jwt.sign(
@@ -32,7 +46,8 @@ router.post('/register', authLimiter, async (req, res, next) => {
 
     const existing = await query('SELECT id FROM users WHERE email=$1', [email])
     if (existing.rows.length) {
-      // Use a generic message to avoid user enumeration
+      // Use a generic message to avoid user enumeration; no email in log for the same reason
+      logger.warn('REGISTER_DUPLICATE', { ip: req.ip, requestId: req.id })
       return res.status(409).json({ error: { code: 'CONFLICT', message: 'Email already registered' } })
     }
 
@@ -49,7 +64,9 @@ router.post('/register', authLimiter, async (req, res, next) => {
       await query('INSERT INTO coach_profiles (user_id) VALUES ($1)', [user.id])
     }
 
-    res.status(201).json({ data: { user, token: signToken(user) } })
+    logger.info('REGISTER_SUCCESS', { userId: user.id, role: user.role, requestId: req.id })
+    res.cookie('jwt', signToken(user), COOKIE_OPTIONS)
+    res.status(201).json({ data: { user } })
   } catch (err) { next(err) }
 })
 
@@ -74,12 +91,22 @@ router.post('/login', authLimiter, async (req, res, next) => {
     const valid = await bcrypt.compare(password, hashToCheck)
 
     if (!rows.length || !valid) {
+      // No email logged — avoids leaking which accounts exist in log aggregators
+      logger.warn('LOGIN_FAILED', { ip: req.ip, requestId: req.id })
       return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid credentials' } })
     }
 
     const { password_hash, ...safeUser } = rows[0]
-    res.json({ data: { user: safeUser, token: signToken(safeUser) } })
+    logger.info('LOGIN_SUCCESS', { userId: safeUser.id, role: safeUser.role, requestId: req.id })
+    res.cookie('jwt', signToken(safeUser), COOKIE_OPTIONS)
+    res.json({ data: { user: safeUser } })
   } catch (err) { next(err) }
+})
+
+// ─── POST /auth/logout ────────────────────────────────────────────────────────
+router.post('/logout', (req, res) => {
+  res.clearCookie('jwt', COOKIE_OPTIONS)
+  res.json({ data: { message: 'Logged out' } })
 })
 
 // ─── GET /auth/me ─────────────────────────────────────────────────────────────

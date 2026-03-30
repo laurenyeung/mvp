@@ -26,8 +26,8 @@ export default function RegisterPage() {
     setError('')
     try {
       const res = await authApi.register(data)
-      const { user, token } = res.data.data
-      setAuth(user, token)
+      const { user } = res.data.data
+      setAuth(user)
       navigate('/')
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Registration failed. Please try again.')

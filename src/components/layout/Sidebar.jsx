@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { Users, Dumbbell, LayoutTemplate, Calendar, History, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/features/auth/store/authStore'
+import { authApi } from '@/lib/api'
 
 const coachNav = [
   { to: '/coach/clients', icon: Users, label: 'Clients' },
@@ -20,7 +21,8 @@ export default function Sidebar({ role }) {
   const navigate = useNavigate()
   const items = role === 'COACH' ? coachNav : clientNav
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try { await authApi.logout() } catch { /* server may be unreachable; clear locally anyway */ }
     logout()
     navigate('/login')
   }

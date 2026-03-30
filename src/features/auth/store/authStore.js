@@ -5,9 +5,9 @@ export const useAuthStore = create(
   persist(
     (set) => ({
       user: null,
-      token: null,
-      setAuth: (user, token) => set({ user, token }),
-      logout: () => set({ user: null, token: null }),
+      // Token is stored only in an httpOnly cookie — never in JS state or localStorage.
+      setAuth: (user) => set({ user }),
+      logout:  ()     => set({ user: null }),
     }),
     { name: 'auth-storage' }
   )
