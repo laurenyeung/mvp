@@ -10,7 +10,7 @@
     "test:verbose": "NODE_ENV=test node --experimental-vm-modules node_modules/.bin/jest --runInBand --forceExit --verbose"
   },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
+    "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
