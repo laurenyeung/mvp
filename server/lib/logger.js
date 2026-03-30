@@ -26,6 +26,8 @@ function ensureLogFile() {
 
 function write(level, event, data) {
   if (IS_TEST) return
+  // debug events are development-only — never written to production logs
+  if (level === 'debug' && IS_PROD) return
   const entry = JSON.stringify({ ts: new Date().toISOString(), level, event, ...data })
   if (IS_PROD) {
     process.stdout.write(entry + '\n')
@@ -41,6 +43,16 @@ function write(level, event, data) {
 
 export const logger = {
   info:  (event, data = {}) => write('info',  event, data),
-  error: (event, data = {}) => write('error', event, data),
   warn:  (event, data = {}) => write('warn',  event, data),
+  // Automatically extracts stack + message from an `err` field if present,
+  // so callers can do: logger.error('EVENT', { err, userId }) without manual stack handling.
+  error: (event, data = {}) => {
+    const { err, ...rest } = data
+    const errFields = err instanceof Error
+      ? { errorMessage: err.message, stack: err.stack }
+      : {}
+    write('error', event, { ...rest, ...errFields })
+  },
+  // debug: development only, silent in production
+  debug: (event, data = {}) => write('debug', event, data),
 }

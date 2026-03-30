@@ -18,8 +18,15 @@ if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
 // OID 1082 = date, 1114 = timestamp without tz, 1184 = timestamptz
 types.setTypeParser(1082, (val) => val) // DATE → string as-is
 
+// Neon (and most managed Postgres providers) require SSL in production.
+// rejectUnauthorized: false disables cert chain verification — transport is still
+// fully encrypted. This is Neon's documented requirement for the pg driver.
+// Local dev uses a Unix socket (no SSL needed).
+const ssl = process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl,
 })
 
 pool.on('error', (err) => {

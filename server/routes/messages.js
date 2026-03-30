@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { query } from '../db/pool.js'
 import { requireAuth } from '../middleware/auth.js'
 import { sendMessageSchema, uuidSchema } from '../middleware/validate.js'
+import { logger } from '../lib/logger.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -101,6 +102,7 @@ router.post('/send', async (req, res, next) => {
     if (!threadRows.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Thread not found' } })
     const t = threadRows[0]
     if (t.coach_user_id !== req.user.id && t.client_user_id !== req.user.id) {
+      logger.warn('MESSAGE_ACCESS_DENIED', { userId: req.user.id, threadId: thread_id, requestId: req.id })
       return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not a participant in this thread' } })
     }
 
@@ -108,6 +110,7 @@ router.post('/send', async (req, res, next) => {
       `INSERT INTO messages (thread_id, sender_id, content) VALUES ($1,$2,$3) RETURNING *`,
       [thread_id, req.user.id, content]
     )
+    logger.info('MESSAGE_SENT', { messageId: rows[0].id, threadId: thread_id, senderId: req.user.id, requestId: req.id })
     res.status(201).json({ data: rows[0] })
   } catch (err) { next(err) }
 })

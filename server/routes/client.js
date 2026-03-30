@@ -8,6 +8,7 @@ import {
   uuidSchema,
   commentSchema,
 } from '../middleware/validate.js'
+import { logger } from '../lib/logger.js'
 
 const router = Router()
 router.use(requireAuth, requireRole('CLIENT'))
@@ -272,6 +273,13 @@ router.post('/workouts/:workoutId/log', async (req, res, next) => {
 
       return workoutLog
     })
+    logger.info('WORKOUT_COMPLETED', {
+      workoutId:     idParsed.data,
+      clientId,
+      exerciseCount: exercise_logs.length,
+      rating:        rating ?? null,
+      requestId:     req.id,
+    })
     res.status(201).json({ data: log })
   } catch (err) { next(err) }
 })
@@ -395,6 +403,7 @@ router.post('/exercise-logs/:id/media', async (req, res, next) => {
       }
       return rows[0]
     })
+    logger.info('MEDIA_UPLOAD_LOGGED', { exerciseLogId: idParsed.data, clientId: req.user.id, mimeType: mime_type, requestId: req.id })
     res.status(201).json({ data: result })
   } catch (err) { next(err) }
 })
@@ -438,6 +447,7 @@ router.post('/progress', async (req, res, next) => {
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
       [clientId, metric_type, metric_label ?? null, value, unit, recorded_at]
     )
+    logger.info('PROGRESS_RECORDED', { metricType: metric_type, clientId, requestId: req.id })
     res.status(201).json({ data: rows[0] })
   } catch (err) { next(err) }
 })

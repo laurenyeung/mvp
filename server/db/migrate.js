@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import { query } from './pool.js'
+import { logger } from '../lib/logger.js'
 
 const SQL = `
 -- ENUMS
@@ -303,10 +304,13 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_i
 `
 
 async function migrate() {
-  console.log('Running migrations…')
+  logger.info('MIGRATE_START', {})
   await query(SQL)
-  console.log('✅  Migrations complete')
+  logger.info('MIGRATE_SUCCESS', {})
   process.exit(0)
 }
 
-migrate().catch(err => { console.error(err); process.exit(1) })
+migrate().catch(err => {
+  logger.error('MIGRATE_ERROR', { err })
+  process.exit(1)
+})

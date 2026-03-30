@@ -166,6 +166,13 @@ This file is updated after every user correction. Each entry captures the mistak
 
 ---
 
+### 2026-03-29 — Skipped fixing moderate severity npm vulnerability
+**What happened:** During a security audit, a moderate severity `brace-expansion` vulnerability was identified but was going to be left unfixed, with only the high severity `path-to-regexp` flagged as a blocker.
+**Root cause:** Mentally categorised "moderate" as acceptable to defer.
+**Rule:** Fix ALL moderate+ severity vulnerabilities before any task is called complete. Run `npm audit fix` and verify `0 vulnerabilities` in both root and server. There is no acceptable threshold above zero for moderate or higher.
+
+---
+
 ### 2026-03-23 — Cross-workout exercise_id in log endpoint allowed silently (data corruption)
 **What happened:** TC-WLOG-003 submitted a `workout_exercise_id` belonging to a different workout. The log was accepted (201) because the FK only validates existence, not ownership. The resulting `exercise_log` row had a cross-workout reference — silent data corruption.
 **Root cause:** No validation that submitted `workout_exercise_id`s belong to the target workout. FK constraints only enforce existence, not scope.

@@ -11,6 +11,7 @@ import {
   safeStr,
 } from '../middleware/validate.js'
 import { z } from 'zod'
+import { logger } from '../lib/logger.js'
 
 const router = Router()
 router.use(requireAuth, requireRole('COACH', 'ADMIN'))
@@ -119,6 +120,7 @@ router.post('/templates', async (req, res, next) => {
       }
       return template
     })
+    logger.info('TEMPLATE_CREATED', { templateId: result.id, name, coachId, exerciseCount: exercises.length, requestId: req.id })
     res.status(201).json({ data: result })
   } catch (err) { next(err) }
 })
@@ -171,6 +173,7 @@ router.put('/templates/:id', async (req, res, next) => {
       }
       return rows[0]
     })
+    logger.info('TEMPLATE_UPDATED', { templateId: idParsed.data, coachId, requestId: req.id })
     res.json({ data: result })
   } catch (err) { next(err) }
 })
@@ -184,6 +187,7 @@ router.delete('/templates/:id', async (req, res, next) => {
       `UPDATE workout_templates SET is_archived=true WHERE id=$1 AND coach_id=$2`,
       [idParsed.data, coachId]
     )
+    logger.info('TEMPLATE_DELETED', { templateId: idParsed.data, coachId, requestId: req.id })
     res.json({ data: { deleted: true } })
   } catch (err) { next(err) }
 })
@@ -256,6 +260,7 @@ router.post('/clients', async (req, res, next) => {
        WHERE cp.id=$1`,
       [inserted[0].id]
     )
+    logger.info('CLIENT_ASSIGNED', { clientUserId: user_id, coachId, clientProfileId: inserted[0].id, requestId: req.id })
     res.status(201).json({ data: full[0] })
   } catch (err) { next(err) }
 })
@@ -468,6 +473,14 @@ router.post('/workouts/assign', async (req, res, next) => {
 
       return w
     })
+    logger.info('WORKOUT_ASSIGNED', {
+      workoutId:     workout.id,
+      clientId:      client_id,
+      coachId,
+      templateId:    template_id,
+      scheduledDate: scheduled_date,
+      requestId:     req.id,
+    })
     res.status(201).json({ data: workout })
   } catch (err) { next(err) }
 })
@@ -500,6 +513,7 @@ router.patch('/workout-exercises/:id', async (req, res, next) => {
     )
     if (!existing.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Not found' } })
     if (existing[0].coach_id !== coachId) {
+      logger.warn('COACH_ACCESS_DENIED', { coachId, resourceId: idParsed.data, resource: 'workout_exercise', action: 'update', requestId: req.id })
       return res.status(403).json({ error: { code: 'NOT_YOUR_RESOURCE', message: 'Forbidden' } })
     }
 
@@ -516,6 +530,7 @@ router.patch('/workout-exercises/:id', async (req, res, next) => {
       [prescribed_sets ?? null, prescribed_reps ?? null, prescribed_weight ?? null,
        prescribed_tempo ?? null, prescribed_rest_secs ?? null, notes ?? null, idParsed.data]
     )
+    logger.info('WORKOUT_EXERCISE_UPDATED', { workoutExerciseId: idParsed.data, coachId, requestId: req.id })
     res.json({ data: rows[0] })
   } catch (err) { next(err) }
 })
@@ -542,6 +557,7 @@ router.patch('/workouts/:id', async (req, res, next) => {
       [scheduled_date ?? null, name ?? null, status ?? null, idParsed.data, coachId]
     )
     if (!rows.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Workout not found' } })
+    logger.info('WORKOUT_UPDATED', { workoutId: idParsed.data, coachId, fields: Object.keys(parsed.data), requestId: req.id })
     res.json({ data: rows[0] })
   } catch (err) { next(err) }
 })
@@ -567,6 +583,7 @@ router.delete('/workouts/:id', async (req, res, next) => {
       return res.status(409).json({ error: { code: 'CONFLICT', message: 'Workout already has a log' } })
 
     await query('DELETE FROM workouts WHERE id=$1', [idParsed.data])
+    logger.info('WORKOUT_DELETED', { workoutId: idParsed.data, coachId, requestId: req.id })
     res.json({ data: { deleted: true } })
   } catch (err) { next(err) }
 })

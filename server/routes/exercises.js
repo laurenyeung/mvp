@@ -7,6 +7,7 @@ import {
   paginationSchema,
   uuidSchema,
 } from '../middleware/validate.js'
+import { logger } from '../lib/logger.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -70,6 +71,7 @@ router.post('/', requireRole('COACH', 'ADMIN'), async (req, res, next) => {
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
       [name, description ?? null, equipment_required ?? [], req.user.id, is_public, youtube_url ?? null]
     )
+    logger.info('EXERCISE_CREATED', { exerciseId: rows[0].id, name, userId: req.user.id, requestId: req.id })
     res.status(201).json({ data: rows[0] })
   } catch (err) { next(err) }
 })
@@ -90,6 +92,7 @@ router.patch('/:id', requireRole('COACH', 'ADMIN'), async (req, res, next) => {
     const { rows: existing } = await query('SELECT created_by FROM exercises WHERE id=$1', [idParsed.data])
     if (!existing.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Not found' } })
     if (req.user.role !== 'ADMIN' && existing[0].created_by !== req.user.id) {
+      logger.warn('EXERCISE_ACCESS_DENIED', { exerciseId: idParsed.data, userId: req.user.id, action: 'update', requestId: req.id })
       return res.status(403).json({ error: { code: 'NOT_YOUR_RESOURCE', message: 'Forbidden' } })
     }
 
@@ -103,6 +106,7 @@ router.patch('/:id', requireRole('COACH', 'ADMIN'), async (req, res, next) => {
        WHERE id=$5 RETURNING *`,
       [name ?? null, description ?? null, is_public ?? null, youtube_url ?? null, idParsed.data]
     )
+    logger.info('EXERCISE_UPDATED', { exerciseId: idParsed.data, userId: req.user.id, requestId: req.id })
     res.json({ data: rows[0] })
   } catch (err) { next(err) }
 })
@@ -116,10 +120,12 @@ router.delete('/:id', requireRole('COACH', 'ADMIN'), async (req, res, next) => {
     const { rows: existing } = await query('SELECT created_by FROM exercises WHERE id=$1', [idParsed.data])
     if (!existing.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Not found' } })
     if (req.user.role !== 'ADMIN' && existing[0].created_by !== req.user.id) {
+      logger.warn('EXERCISE_ACCESS_DENIED', { exerciseId: idParsed.data, userId: req.user.id, action: 'delete', requestId: req.id })
       return res.status(403).json({ error: { code: 'NOT_YOUR_RESOURCE', message: 'Forbidden' } })
     }
 
     await query('DELETE FROM exercises WHERE id=$1', [idParsed.data])
+    logger.info('EXERCISE_DELETED', { exerciseId: idParsed.data, userId: req.user.id, requestId: req.id })
     res.json({ data: { deleted: true } })
   } catch (err) { next(err) }
 })

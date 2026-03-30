@@ -3,6 +3,7 @@ import { query } from '../db/pool.js'
 import { requireAuth } from '../middleware/auth.js'
 import { mediaLimiter } from '../middleware/rateLimiter.js'
 import { presignSchema } from '../middleware/validate.js'
+import { logger } from '../lib/logger.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -38,6 +39,7 @@ router.post('/presign', mediaLimiter, async (req, res, next) => {
     // ── Stub for local dev ────────────────────────────────────────────────────
     // Note: user ID is scoped into the key so users can't overwrite each other's files
     const s3_key = `uploads/${context}/${req.user.id}/${Date.now()}-${file_name}`
+    logger.info('MEDIA_PRESIGN_REQUESTED', { userId: req.user.id, context, mimeType: mime_type, requestId: req.id })
     res.json({
       data: {
         upload_url: `https://your-bucket.s3.amazonaws.com/${s3_key}?presigned=true`,
@@ -55,6 +57,7 @@ router.get('/:s3Key/signed-url', mediaLimiter, async (req, res, next) => {
 
     // Prevent path traversal — reject any key with ../ sequences or absolute paths
     if (key.includes('..') || key.startsWith('/')) {
+      logger.warn('MEDIA_PATH_TRAVERSAL', { userId: req.user.id, s3Key: key, ip: req.ip, requestId: req.id })
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid key' } })
     }
 
@@ -64,6 +67,7 @@ router.get('/:s3Key/signed-url', mediaLimiter, async (req, res, next) => {
       [key, req.user.id]
     )
     if (!rows.length) {
+      logger.warn('MEDIA_ACCESS_DENIED', { userId: req.user.id, s3Key: key, requestId: req.id })
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Not found' } })
     }
 
