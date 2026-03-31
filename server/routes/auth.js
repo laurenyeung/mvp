@@ -105,7 +105,7 @@ router.post('/login', authLimiter, async (req, res, next) => {
 
 // ─── POST /auth/logout ────────────────────────────────────────────────────────
 router.post('/logout', (req, res) => {
-  res.clearCookie('jwt', COOKIE_OPTIONS)
+  res.clearCookie('jwt', { httpOnly: true, secure: IS_PROD, sameSite: IS_PROD ? 'none' : 'lax' })
   res.json({ data: { message: 'Logged out' } })
 })
 
