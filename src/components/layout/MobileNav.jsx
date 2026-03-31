@@ -1,6 +1,8 @@
-import { NavLink } from 'react-router-dom'
-import { Users, Dumbbell, LayoutTemplate, Calendar, History } from 'lucide-react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { Users, Dumbbell, LayoutTemplate, Calendar, History, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/features/auth/store/authStore'
+import { authApi } from '@/lib/api'
 
 const coachNav = [
   { to: '/coach/clients', icon: Users, label: 'Clients' },
@@ -16,6 +18,14 @@ const clientNav = [
 
 export default function MobileNav({ role }) {
   const items = role === 'COACH' ? coachNav : clientNav
+  const { logout } = useAuthStore()
+  const navigate = useNavigate()
+
+  const handleLogout = async () => {
+    try { await authApi.logout() } catch { /* clear locally anyway */ }
+    logout()
+    navigate('/login')
+  }
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-pixel-border safe-area-bottom">
@@ -42,6 +52,13 @@ export default function MobileNav({ role }) {
             )}
           </NavLink>
         ))}
+        <button
+          onClick={handleLogout}
+          className="flex flex-col items-center justify-center flex-1 gap-0.5 text-xs font-medium text-gray-400"
+        >
+          <LogOut size={20} strokeWidth={1.5} />
+          <span>Sign out</span>
+        </button>
       </div>
     </nav>
   )
