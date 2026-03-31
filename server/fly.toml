@@ -14,10 +14,11 @@
 #
 # MIGRATIONS run automatically before each deploy via release_command below.
 
-app            = "REPLACE_WITH_YOUR_APP_NAME"
+app            = "lockedin-mvp-v1"
 primary_region = "iad"
 
 [build]
+  dockerfile = "Dockerfile"
 
 # Non-sensitive config only. Secrets (DATABASE_URL, JWT_SECRET, ALLOWED_ORIGINS)
 # must be set via `fly secrets set` — never put real values in this file.
