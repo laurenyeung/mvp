@@ -32,6 +32,10 @@ const app  = express()
 const PORT = process.env.PORT || 4000
 const IS_PROD = process.env.NODE_ENV === 'production'
 
+// Trust Fly.io's proxy so Express sees the real client IP in req.ip.
+// Required for express-rate-limit to work correctly behind a reverse proxy.
+if (IS_PROD) app.set('trust proxy', 1)
+
 // ─── Request ID ──────────────────────────────────────────────────────────────
 // Attach a UUID to every request so all log lines for one request can be correlated.
 // Exposed as X-Request-Id so clients/tests can reference it too.
