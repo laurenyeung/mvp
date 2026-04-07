@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Users, Dumbbell, LayoutTemplate, Calendar, History, LogOut } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/features/auth/store/authStore'
 import { authApi } from '@/lib/api'
@@ -21,11 +22,13 @@ export default function MobileNav({ role }) {
   const items = role === 'COACH' ? coachNav : clientNav
   const { logout } = useAuthStore()
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const [confirming, setConfirming] = useState(false)
 
   const handleLogout = async () => {
     try { await authApi.logout() } catch { /* clear locally anyway */ }
     logout()
+    qc.clear()
     navigate('/login')
   }
 
