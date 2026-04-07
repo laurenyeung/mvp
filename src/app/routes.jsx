@@ -9,6 +9,7 @@ import ClientRosterPage from '@/features/clients/pages/ClientRosterPage.jsx'
 import ClientDetailPage from '@/features/clients/pages/ClientDetailPage.jsx'
 import WorkoutBuilderPage from '@/features/workouts/pages/WorkoutBuilderPage.jsx'
 import WorkoutAssignPage from '@/features/workouts/pages/WorkoutAssignPage.jsx'
+import CoachWorkoutDetailPage from '@/features/workouts/pages/CoachWorkoutDetailPage.jsx'
 
 // Client pages
 import TodayWorkoutPage from '@/features/workouts/pages/TodayWorkoutPage.jsx'
@@ -45,6 +46,7 @@ export const router = createBrowserRouter([
       { path: 'coach/clients', element: <ClientRosterPage /> },
       { path: 'coach/clients/:id', element: <ClientDetailPage /> },
       { path: 'coach/clients/:id/assign', element: <WorkoutAssignPage /> },
+      { path: 'coach/workouts/:id', element: <CoachWorkoutDetailPage /> },
       { path: 'coach/templates', element: <WorkoutBuilderPage /> },
 
       // Client routes

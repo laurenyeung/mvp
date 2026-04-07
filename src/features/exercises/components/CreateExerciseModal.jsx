@@ -5,15 +5,29 @@ import { X } from 'lucide-react'
 import { exerciseSchema } from '@/lib/validationSchemas'
 import { exercisesApi } from '@/lib/api'
 
-export default function CreateExerciseModal({ onClose }) {
+export default function CreateExerciseModal({ onClose, exercise }) {
   const qc = useQueryClient()
+  const isEdit = !!exercise
+
   const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(exerciseSchema),
-    defaultValues: { is_public: false },
+    defaultValues: isEdit
+      ? {
+          name: exercise.name || '',
+          description: exercise.description || '',
+          youtube_url: exercise.youtube_url || '',
+          is_public: exercise.is_public ?? false,
+        }
+      : { is_public: false },
   })
 
   const { mutate, isPending, error } = useMutation({
-    mutationFn: (data) => exercisesApi.create(data),
+    mutationFn: (data) => {
+      const payload = { ...data, youtube_url: data.youtube_url || null }
+      return isEdit
+        ? exercisesApi.update(exercise.id, payload)
+        : exercisesApi.create(payload)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['exercises'] })
       onClose()
@@ -24,7 +38,7 @@ export default function CreateExerciseModal({ onClose }) {
     <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl w-full max-w-md border border-pixel-border shadow-card-hover max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-pixel-border shrink-0">
-          <h2 className="font-semibold text-gray-900">New Exercise</h2>
+          <h2 className="font-semibold text-gray-900">{isEdit ? 'Edit Exercise' : 'New Exercise'}</h2>
           <button onClick={onClose} className="btn-ghost p-1.5"><X size={18} /></button>
         </div>
 
@@ -47,7 +61,7 @@ export default function CreateExerciseModal({ onClose }) {
               className="input"
               placeholder="https://youtube.com/shorts/…"
             />
-            <p className="text-xs text-gray-400 mt-1">Paste a YouTube Short or video link — it will play as a looping demo on the exercise card.</p>
+            <p className="text-xs text-gray-400 mt-1">Paste a YouTube Short or video link — it will play as a looping demo on the exercise card. Clear the field to remove it.</p>
           </div>
 
           <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
@@ -62,7 +76,7 @@ export default function CreateExerciseModal({ onClose }) {
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
             <button type="submit" disabled={isPending} className="btn-primary flex-1">
-              {isPending ? 'Saving…' : 'Create Exercise'}
+              {isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Exercise'}
             </button>
           </div>
         </form>

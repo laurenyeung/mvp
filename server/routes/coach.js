@@ -535,6 +535,64 @@ router.patch('/workout-exercises/:id', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// ── GET /coach/workouts/:id ───────────────────────────────────────────────────
+router.get('/workouts/:id', async (req, res, next) => {
+  try {
+    const idParsed = uuidSchema.safeParse(req.params.id)
+    if (!idParsed.success)
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Workout not found' } })
+
+    const coachId = await getCoachProfileId(req.user.id)
+    const { rows: wRows } = await query(
+      'SELECT * FROM workouts WHERE id=$1 AND coach_id=$2',
+      [idParsed.data, coachId]
+    )
+    if (!wRows.length)
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Workout not found' } })
+
+    const { rows: exRows } = await query(
+      `SELECT we.*, e.name, e.description, e.youtube_url
+       FROM workout_exercises we
+       JOIN exercises e ON e.id = we.exercise_id
+       WHERE we.workout_id = $1
+       ORDER BY we.order_index`,
+      [idParsed.data]
+    )
+    const workout = { ...wRows[0], exercises: exRows }
+
+    if (workout.status === 'COMPLETED') {
+      const { rows: logRows } = await query(
+        'SELECT * FROM workout_logs WHERE workout_id=$1', [idParsed.data]
+      )
+      if (logRows.length) {
+        const { rows: elRows } = await query(
+          `SELECT el.*,
+              COALESCE(
+                json_agg(
+                  json_build_object('set_index', esl.set_index, 'reps', esl.reps, 'weight', esl.weight)
+                  ORDER BY esl.set_index
+                ) FILTER (WHERE esl.id IS NOT NULL),
+                '[]'::json
+              ) AS sets
+           FROM exercise_logs el
+           LEFT JOIN exercise_set_logs esl ON esl.exercise_log_id = el.id
+           WHERE el.workout_log_id = $1
+           GROUP BY el.id`,
+          [logRows[0].id]
+        )
+        const logByExercise = {}
+        for (const el of elRows) logByExercise[el.workout_exercise_id] = el
+        workout.exercises = workout.exercises.map(ex => ({
+          ...ex,
+          exercise_log: logByExercise[ex.id] ?? null,
+        }))
+      }
+    }
+
+    res.json({ data: workout })
+  } catch (err) { next(err) }
+})
+
 // ── PATCH /coach/workouts/:id ─────────────────────────────────────────────────
 router.patch('/workouts/:id', async (req, res, next) => {
   try {
