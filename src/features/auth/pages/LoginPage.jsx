@@ -2,6 +2,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { loginSchema } from '@/lib/validationSchemas'
 import { authApi } from '@/lib/api'
 import { useAuthStore } from '../store/authStore'
@@ -9,6 +10,7 @@ import { useAuthStore } from '../store/authStore'
 export default function LoginPage() {
   const navigate = useNavigate()
   const { setAuth } = useAuthStore()
+  const qc = useQueryClient()
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -21,6 +23,7 @@ export default function LoginPage() {
     try {
       const res = await authApi.login(data)
       const { user } = res.data.data
+      qc.clear()
       setAuth(user)
       navigate('/')
     } catch (err) {

@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Users, Dumbbell, LayoutTemplate, Calendar, History, LogOut } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/features/auth/store/authStore'
 import { authApi } from '@/lib/api'
@@ -19,11 +20,13 @@ const clientNav = [
 export default function Sidebar({ role }) {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const items = role === 'COACH' ? coachNav : clientNav
 
   const handleLogout = async () => {
     try { await authApi.logout() } catch { /* server may be unreachable; clear locally anyway */ }
     logout()
+    qc.clear()
     navigate('/login')
   }
 

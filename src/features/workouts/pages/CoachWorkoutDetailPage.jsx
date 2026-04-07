@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp, Pencil } from 'lucide-react'
 import { coachApi } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
@@ -122,6 +122,9 @@ const SECTIONS = [
 export default function CoachWorkoutDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const qc = useQueryClient()
+  const [isEditingDate, setIsEditingDate] = useState(false)
+  const [dateInput, setDateInput] = useState('')
 
   const { data: workout, isLoading } = useQuery({
     queryKey: ['coach-workout', id],
@@ -134,10 +137,27 @@ export default function CoachWorkoutDetailPage() {
     enabled: !!workout?.client_id,
   })
 
+  const { mutate: saveDate, isPending: isSavingDate } = useMutation({
+    mutationFn: () => coachApi.updateWorkout(id, { scheduled_date: dateInput }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['coach-workout', id] })
+      qc.invalidateQueries({ queryKey: ['client-workouts', workout.client_id] })
+      setIsEditingDate(false)
+    },
+  })
+
   if (isLoading) return <div className="p-6 text-center text-gray-400">Loading…</div>
   if (!workout)  return <div className="p-6 text-center text-gray-400">Workout not found</div>
 
   const { icon: StatusIcon, color: statusColor, label: statusLabel } = STATUS[workout.status] || STATUS.SCHEDULED
+  const canEdit = workout.status === 'SCHEDULED'
+
+  function startEditDate() {
+    // Format the existing date as YYYY-MM-DD for the input
+    const d = workout.scheduled_date ? workout.scheduled_date.slice(0, 10) : ''
+    setDateInput(d)
+    setIsEditingDate(true)
+  }
 
   return (
     <div className="max-w-lg mx-auto px-4 py-6">
@@ -156,7 +176,42 @@ export default function CoachWorkoutDetailPage() {
         </div>
         <div className="flex items-center gap-2 mt-1 text-sm text-gray-400">
           {client && <span>{client.first_name} {client.last_name} · </span>}
-          <span>{formatDate(workout.scheduled_date)}</span>
+          {isEditingDate ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={dateInput}
+                onChange={e => setDateInput(e.target.value)}
+                className="input text-sm py-1 px-2 h-7 w-auto"
+              />
+              <button
+                onClick={() => saveDate()}
+                disabled={isSavingDate || !dateInput}
+                className="btn-primary py-1 px-2.5 text-xs"
+              >
+                {isSavingDate ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                onClick={() => setIsEditingDate(false)}
+                className="btn-ghost py-1 px-2 text-xs"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <span className="flex items-center gap-1.5">
+              {formatDate(workout.scheduled_date)}
+              {canEdit && (
+                <button
+                  onClick={startEditDate}
+                  className="text-gray-300 hover:text-pixel-accent transition-colors"
+                  aria-label="Edit date"
+                >
+                  <Pencil size={12} />
+                </button>
+              )}
+            </span>
+          )}
         </div>
       </div>
 
