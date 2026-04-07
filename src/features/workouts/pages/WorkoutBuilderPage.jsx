@@ -27,10 +27,10 @@ export default function WorkoutBuilderPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-8">
         <h1 className="page-header">Workout Templates</h1>
-        <button onClick={() => setShowCreate(true)} className="btn-primary gap-2">
-          <Plus size={16} /> New
+        <button onClick={() => setShowCreate(true)} className="btn-primary gap-1.5 py-1.5 px-3">
+          <Plus size={15} /> New
         </button>
       </div>
 
@@ -93,7 +93,7 @@ export default function WorkoutBuilderPage() {
       )}
 
       {confirmDeleteId && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100] px-4">
           <div className="bg-white rounded-xl shadow-card border border-pixel-border p-6 max-w-sm w-full">
             <h3 className="font-bold text-gray-900 text-lg mb-1">Delete template?</h3>
             <p className="text-sm text-gray-500 mb-5">This cannot be undone. Any workouts already assigned from this template will not be affected.</p>

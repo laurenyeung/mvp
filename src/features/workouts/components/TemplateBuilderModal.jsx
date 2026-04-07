@@ -16,9 +16,9 @@ function MainSlot({ ex, flatIdx, onRemove, onChange }) {
       </div>
       <div className="grid grid-cols-3 gap-2 pl-6">
         {[
-          { key: 'prescribed_sets', label: 'Sets', placeholder: '3' },
-          { key: 'prescribed_reps', label: 'Reps', placeholder: '10' },
-          { key: 'prescribed_rest_secs', label: 'Rest (s)', placeholder: '90' },
+          { key: 'prescribed_sets', label: 'Sets', placeholder: '0' },
+          { key: 'prescribed_reps', label: 'Reps', placeholder: '0' },
+          { key: 'prescribed_rest_secs', label: 'Rest (s)', placeholder: '0' },
         ].map(({ key, label, placeholder }) => (
           <div key={key}>
             <p className="text-xs text-gray-400 mb-1">{label}</p>
@@ -201,7 +201,7 @@ export default function TemplateBuilderModal({ template, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl w-full max-w-lg border border-pixel-border max-h-[90vh] flex flex-col shadow-card-hover">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-pixel-border shrink-0">
