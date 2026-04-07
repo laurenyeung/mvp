@@ -11,16 +11,24 @@ const router = Router()
 const IS_PROD = process.env.NODE_ENV === 'production'
 
 // Cookie options for the JWT.
-// SameSite must be 'none' in production because the frontend (Vercel) and
-// backend (Fly.io) are on different domains — 'strict'/'lax' would silently
-// drop cookies on cross-origin XHR. In dev, Vite proxies /api making
-// requests same-origin, so 'lax' is fine and avoids the need for HTTPS.
-const COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure:   IS_PROD,           // required when sameSite='none'
-  sameSite: IS_PROD ? 'none' : 'lax',
-  maxAge:   7 * 24 * 60 * 60 * 1000, // 7 days — matches JWT_EXPIRES_IN
-}
+// Frontend (lockedinforlife.com) and backend (api.lockedinforlife.com) share
+// the same root domain, so SameSite=Lax works on all browsers including iOS.
+// domain=.lockedinforlife.com allows the cookie to be sent to subdomains.
+// In dev, Vite proxies /api making requests same-origin so no domain needed.
+const COOKIE_OPTIONS = IS_PROD
+  ? {
+      httpOnly: true,
+      secure:   true,
+      sameSite: 'lax',
+      domain:   '.lockedinforlife.com',
+      maxAge:   7 * 24 * 60 * 60 * 1000,
+    }
+  : {
+      httpOnly: true,
+      secure:   false,
+      sameSite: 'lax',
+      maxAge:   7 * 24 * 60 * 60 * 1000,
+    }
 
 function signToken(user) {
   return jwt.sign(
@@ -105,7 +113,10 @@ router.post('/login', authLimiter, async (req, res, next) => {
 
 // ─── POST /auth/logout ────────────────────────────────────────────────────────
 router.post('/logout', (req, res) => {
-  res.clearCookie('jwt', { httpOnly: true, secure: IS_PROD, sameSite: IS_PROD ? 'none' : 'lax' })
+  res.clearCookie('jwt', IS_PROD
+    ? { httpOnly: true, secure: true, sameSite: 'lax', domain: '.lockedinforlife.com' }
+    : { httpOnly: true, secure: false, sameSite: 'lax' }
+  )
   res.json({ data: { message: 'Logged out' } })
 })
 

@@ -52,26 +52,19 @@ app.use(cookieParser())
 app.use(helmet())
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
-const rawOrigins = IS_PROD
+const ALLOWED_ORIGINS = IS_PROD
   ? (process.env.ALLOWED_ORIGINS ?? '').split(',').map(o => o.trim()).filter(Boolean)
   : ['http://localhost:3000']
 
-// Entries starting with '*' are treated as suffix wildcards, e.g. *.vercel.app
-const EXACT_ORIGINS   = rawOrigins.filter(o => !o.startsWith('*'))
-const SUFFIX_PATTERNS = rawOrigins.filter(o => o.startsWith('*')).map(o => o.slice(1))
-
-if (IS_PROD && rawOrigins.length === 0) {
+if (IS_PROD && ALLOWED_ORIGINS.length === 0) {
   console.error('❌  ALLOWED_ORIGINS is required in production.')
-  console.error('    Set it to your Vercel domain(s), e.g.: https://your-app.vercel.app')
-  console.error('    On Fly.io: fly secrets set ALLOWED_ORIGINS="https://your-app.vercel.app"')
+  console.error('    On Fly.io: fly secrets set ALLOWED_ORIGINS="https://lockedinforlife.com,https://www.lockedinforlife.com"')
   process.exit(1)
 }
 
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin) return cb(null, true)
-    if (EXACT_ORIGINS.includes(origin)) return cb(null, true)
-    if (SUFFIX_PATTERNS.some(s => origin.endsWith(s))) return cb(null, true)
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true)
     cb(new Error(`CORS: origin ${origin} not allowed`))
   },
   credentials: true,
