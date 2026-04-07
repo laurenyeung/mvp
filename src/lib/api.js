@@ -52,6 +52,7 @@ export const coachApi = {
 
   // Workouts
   assignWorkout:  (body)      => api.post('/coach/workouts/assign', body),
+  getWorkout:     (id)        => api.get(`/coach/workouts/${id}`),
   updateWorkout:  (id, body)  => api.patch(`/coach/workouts/${id}`, body),
   deleteWorkout:  (id)        => api.delete(`/coach/workouts/${id}`),
 

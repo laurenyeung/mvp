@@ -173,6 +173,20 @@ This file is updated after every user correction. Each entry captures the mistak
 
 ---
 
+### 2026-04-07 — New coach endpoint used req.user.id instead of coach_profiles.id
+**What happened:** `GET /coach/workouts/:id` returned 404 for valid workouts because the ownership check used `req.user.id` directly.
+**Root cause:** The `coach_id` column in `workouts` (and `workout_templates`, `client_profiles`) stores `coach_profiles.id`, not `users.id`. Every existing coach route resolves this via `getCoachProfileId(req.user.id)` — the new endpoint skipped that step.
+**Rule:** Any new coach route that filters by `coach_id` must first call `const coachId = await getCoachProfileId(req.user.id)` and use `coachId` in the query — never `req.user.id` directly.
+
+---
+
+### 2026-04-07 — Push rejected because remote had new commits
+**What happened:** `git push` failed with "fetch first" because the remote branch had commits not present locally.
+**Root cause:** Pushed without pulling first, so local and remote histories had diverged.
+**Rule:** Always run `git pull` (merge) immediately before `git push`. The full push sequence is: `git pull && git push -u origin HEAD`.
+
+---
+
 ### 2026-03-23 — Cross-workout exercise_id in log endpoint allowed silently (data corruption)
 **What happened:** TC-WLOG-003 submitted a `workout_exercise_id` belonging to a different workout. The log was accepted (201) because the FK only validates existence, not ownership. The resulting `exercise_log` row had a cross-workout reference — silent data corruption.
 **Root cause:** No validation that submitted `workout_exercise_id`s belong to the target workout. FK constraints only enforce existence, not scope.
