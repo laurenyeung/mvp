@@ -310,7 +310,7 @@ router.get('/clients/:clientId/workouts', async (req, res, next) => {
     if (!idParsed.success) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Client not found' } })
     const coachId = await getCoachProfileId(req.user.id)
 
-    const ALLOWED_STATUSES = ['SCHEDULED', 'COMPLETED', 'MISSED']
+    const ALLOWED_STATUSES = ['SCHEDULED', 'COMPLETED']
     const status = ALLOWED_STATUSES.includes(req.query.status) ? req.query.status : null
     const dateRe = /^\d{4}-\d{2}-\d{2}$/
     const from = dateRe.test(req.query.from ?? '') ? req.query.from : null

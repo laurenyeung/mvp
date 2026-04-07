@@ -6,7 +6,7 @@ const SQL = `
 -- ENUMS
 DO $$ BEGIN
   CREATE TYPE user_role         AS ENUM ('COACH','CLIENT','ADMIN');
-  CREATE TYPE workout_status    AS ENUM ('SCHEDULED','COMPLETED','MISSED');
+  CREATE TYPE workout_status    AS ENUM ('SCHEDULED','COMPLETED');
   CREATE TYPE media_type_enum   AS ENUM ('VIDEO','IMAGE');
   CREATE TYPE media_rel_type    AS ENUM ('EXERCISE_LOG','PROGRESS','MESSAGE');
   CREATE TYPE metric_type_enum  AS ENUM ('WEIGHT','BODY_FAT','WAIST','CUSTOM');
@@ -141,6 +141,23 @@ CREATE TABLE IF NOT EXISTS workouts (
 CREATE INDEX IF NOT EXISTS idx_workouts_client_date ON workouts(client_id, scheduled_date);
 CREATE INDEX IF NOT EXISTS idx_workouts_coach       ON workouts(coach_id);
 CREATE INDEX IF NOT EXISTS idx_workouts_status      ON workouts(status);
+
+-- Remove MISSED from workout_status enum on existing DBs (idempotent; workouts table must exist first)
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_enum
+    WHERE enumlabel = 'MISSED'
+      AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'workout_status')
+  ) THEN
+    UPDATE workouts SET status = 'SCHEDULED' WHERE status = 'MISSED';
+    ALTER TABLE workouts ALTER COLUMN status DROP DEFAULT;
+    CREATE TYPE workout_status_new AS ENUM ('SCHEDULED', 'COMPLETED');
+    ALTER TABLE workouts ALTER COLUMN status TYPE workout_status_new USING status::text::workout_status_new;
+    ALTER TABLE workouts ALTER COLUMN status SET DEFAULT 'SCHEDULED';
+    DROP TYPE workout_status;
+    ALTER TYPE workout_status_new RENAME TO workout_status;
+  END IF;
+END $$;
 
 -- WORKOUT EXERCISES (snapshot)
 CREATE TABLE IF NOT EXISTS workout_exercises (

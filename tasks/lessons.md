@@ -187,6 +187,13 @@ This file is updated after every user correction. Each entry captures the mistak
 
 ---
 
+### 2026-04-07 — Dead code left in place after removing a feature
+**What happened:** After removing `MISSED` status, the `MISSED` key was left in STATUS objects across three frontend files. The code was unreachable but added noise and confusion.
+**Root cause:** Treated "stop using the value" as sufficient cleanup. Dead entries in maps/enums/switch statements are invisible at runtime but mislead future readers.
+**Rule:** When a value is removed from a system (enum, status, feature flag), delete every reference to it in the same task — status maps, switch cases, filter arrays, test assertions, type definitions. Dead code is not neutral; it lies about what the system supports.
+
+---
+
 ### 2026-03-23 — Cross-workout exercise_id in log endpoint allowed silently (data corruption)
 **What happened:** TC-WLOG-003 submitted a `workout_exercise_id` belonging to a different workout. The log was accepted (201) because the FK only validates existence, not ownership. The resulting `exercise_log` row had a cross-workout reference — silent data corruption.
 **Root cause:** No validation that submitted `workout_exercise_id`s belong to the target workout. FK constraints only enforce existence, not scope.

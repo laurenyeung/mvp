@@ -6,9 +6,17 @@ import { formatDate, getInitials } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
 const STATUS = {
-  COMPLETED: { icon: CheckCircle2, color: 'text-green-500', label: 'Done' },
-  MISSED:    { icon: XCircle,      color: 'text-red-400',   label: 'Missed' },
-  SCHEDULED: { icon: Clock,        color: 'text-blue-500',  label: 'Scheduled' },
+  COMPLETED:  { icon: CheckCircle2, color: 'text-green-500', label: 'Done' },
+  SCHEDULED:  { icon: Clock,        color: 'text-blue-500',  label: 'Scheduled' },
+  INCOMPLETE: { icon: XCircle,      color: 'text-red-500',   label: 'Incomplete' },
+}
+
+function resolveStatus(w) {
+  if (w.status === 'SCHEDULED' && w.scheduled_date) {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    if (new Date(w.scheduled_date) < today) return 'INCOMPLETE'
+  }
+  return w.status
 }
 
 export default function ClientDetailPage() {
@@ -102,7 +110,7 @@ export default function ClientDetailPage() {
       ) : (
         <div className="space-y-2">
           {workouts?.map(w => {
-            const { icon: Icon, color, label } = STATUS[w.status] || STATUS.SCHEDULED
+            const { icon: Icon, color, label } = STATUS[resolveStatus(w)] || STATUS.SCHEDULED
             return (
               <div
                 key={w.id}
@@ -115,7 +123,7 @@ export default function ClientDetailPage() {
                   <p className="text-xs text-gray-400">{formatDate(w.scheduled_date)}</p>
                 </div>
                 <span className={cn('text-xs font-medium shrink-0', color)}>{label}</span>
-                {w.status === 'SCHEDULED' && (
+                {(w.status === 'SCHEDULED' || resolveStatus(w) === 'INCOMPLETE') && (
                   <button
                     onClick={e => { e.stopPropagation(); deleteWorkout(w.id) }}
                     className="text-gray-300 hover:text-red-400 p-2 transition-colors"

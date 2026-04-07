@@ -83,7 +83,7 @@ router.get('/workouts/past', async (req, res, next) => {
     const today = new Date().toISOString().split('T')[0]
     const { rows } = await query(
       `SELECT * FROM workouts
-       WHERE client_id=$1 AND (scheduled_date < $2 OR status IN ('COMPLETED','MISSED'))
+       WHERE client_id=$1 AND (scheduled_date < $2 OR status = 'COMPLETED')
        ORDER BY scheduled_date DESC LIMIT 40`,
       [clientId, today]
     )
@@ -98,7 +98,7 @@ router.get('/workouts', async (req, res, next) => {
     const { rows: cpRows } = await query('SELECT id FROM client_profiles WHERE user_id=$1', [req.user.id])
     if (!cpRows.length) return res.json({ data: [] })
     const clientId = cpRows[0].id
-    const ALLOWED_STATUSES = ['SCHEDULED', 'COMPLETED', 'MISSED']
+    const ALLOWED_STATUSES = ['SCHEDULED', 'COMPLETED']
     const status = ALLOWED_STATUSES.includes(req.query.status) ? req.query.status : null
 
     const params = [clientId]

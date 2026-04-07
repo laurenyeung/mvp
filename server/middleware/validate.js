@@ -83,7 +83,7 @@ export const assignWorkoutSchema = z.object({
 export const updateWorkoutSchema = z.object({
   scheduled_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   name:           safeStr(200).optional(),
-  status:         z.enum(['SCHEDULED', 'COMPLETED', 'MISSED']).optional(),
+  status:         z.enum(['SCHEDULED', 'COMPLETED']).optional(),
 })
 
 // ─── Workout log ──────────────────────────────────────────────────────────────
