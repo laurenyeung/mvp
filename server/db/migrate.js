@@ -21,6 +21,23 @@ DO $$ BEGIN
 EXCEPTION WHEN others THEN NULL;
 END $$;
 
+-- Remove MISSED from workout_status enum (idempotent)
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_enum
+    WHERE enumlabel = 'MISSED'
+      AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'workout_status')
+  ) THEN
+    UPDATE workouts SET status = 'SCHEDULED' WHERE status = 'MISSED';
+    ALTER TABLE workouts ALTER COLUMN status DROP DEFAULT;
+    CREATE TYPE workout_status_new AS ENUM ('SCHEDULED', 'COMPLETED');
+    ALTER TABLE workouts ALTER COLUMN status TYPE workout_status_new USING status::text::workout_status_new;
+    ALTER TABLE workouts ALTER COLUMN status SET DEFAULT 'SCHEDULED';
+    DROP TYPE workout_status;
+    ALTER TYPE workout_status_new RENAME TO workout_status;
+  END IF;
+END $$;
+
 DO $$ BEGIN
   CREATE TYPE activity_type AS ENUM ('WORKOUT_COMPLETED','COMMENT_ADDED','VIDEO_UPLOADED','WORKOUT_ASSIGNED');
 EXCEPTION WHEN duplicate_object THEN NULL;
