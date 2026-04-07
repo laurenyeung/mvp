@@ -21,7 +21,7 @@ export default function CreateExerciseModal({ onClose }) {
   })
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl w-full max-w-md border border-pixel-border shadow-card-hover max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-pixel-border shrink-0">
           <h2 className="font-semibold text-gray-900">New Exercise</h2>
