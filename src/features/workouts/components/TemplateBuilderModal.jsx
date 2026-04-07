@@ -2,13 +2,51 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X, Plus, GripVertical, Trash2, Search } from 'lucide-react'
 import { coachApi, exercisesApi } from '@/lib/api'
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+
+// Thin sortable wrapper — applies transform/opacity and passes drag handle props down
+function SortableSlot({ id, children }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+      }}
+    >
+      {children({ dragHandleProps: { ...listeners, ...attributes } })}
+    </div>
+  )
+}
 
 // Slot for MAIN exercises — full prescription fields
-function MainSlot({ ex, flatIdx, onRemove, onChange }) {
+function MainSlot({ ex, flatIdx, onRemove, onChange, dragHandleProps }) {
   return (
     <div className="card p-3 space-y-2">
       <div className="flex items-center gap-2">
-        <GripVertical size={16} className="text-gray-300 shrink-0" />
+        <button
+          {...dragHandleProps}
+          className="text-gray-300 shrink-0 cursor-grab active:cursor-grabbing p-0.5 -ml-0.5"
+          style={{ touchAction: 'none' }}
+          tabIndex={-1}
+        >
+          <GripVertical size={16} />
+        </button>
         <span className="text-sm font-medium text-gray-900 flex-1">{ex.name}</span>
         <button onClick={() => onRemove(flatIdx)} className="text-gray-400 hover:text-red-500 p-1">
           <Trash2 size={14} />
@@ -44,11 +82,18 @@ function MainSlot({ ex, flatIdx, onRemove, onChange }) {
 }
 
 // Slot for WARMUP / COOLDOWN exercises — notes only, no prescription
-function WarmCoolSlot({ ex, flatIdx, onRemove, onChange }) {
+function WarmCoolSlot({ ex, flatIdx, onRemove, onChange, dragHandleProps }) {
   return (
     <div className="card p-3 space-y-2">
       <div className="flex items-center gap-2">
-        <GripVertical size={16} className="text-gray-300 shrink-0" />
+        <button
+          {...dragHandleProps}
+          className="text-gray-300 shrink-0 cursor-grab active:cursor-grabbing p-0.5 -ml-0.5"
+          style={{ touchAction: 'none' }}
+          tabIndex={-1}
+        >
+          <GripVertical size={16} />
+        </button>
         <span className="text-sm font-medium text-gray-900 flex-1">{ex.name}</span>
         <button onClick={() => onRemove(flatIdx)} className="text-gray-400 hover:text-red-500 p-1">
           <Trash2 size={14} />
@@ -66,12 +111,24 @@ function WarmCoolSlot({ ex, flatIdx, onRemove, onChange }) {
   )
 }
 
-function SectionBlock({ label, section, exercises, activePicker, onOpenPicker, onClosePicker, onAdd, onRemove, onChange, exerciseResults, exSearch, setExSearch }) {
+function SectionBlock({ label, section, exercises, activePicker, onOpenPicker, onClosePicker, onAdd, onRemove, onChange, onReorder, exerciseResults, exSearch, setExSearch }) {
   const sectionItems = exercises
     .map((ex, flatIdx) => ({ ex, flatIdx }))
     .filter(({ ex }) => ex.section === section)
 
   const isPickerOpen = activePicker === section
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { delay: 250, tolerance: 5 },
+    })
+  )
+
+  const handleDragEnd = ({ active, over }) => {
+    if (over && active.id !== over.id) {
+      onReorder(section, active.id, over.id)
+    }
+  }
 
   return (
     <div>
@@ -82,18 +139,26 @@ function SectionBlock({ label, section, exercises, activePicker, onOpenPicker, o
         </button>
       </div>
 
-      <div className="space-y-2">
-        {sectionItems.length === 0 && (
-          <p className="text-xs text-gray-300 text-center py-3 border border-dashed border-gray-200 rounded-lg">
-            No exercises yet
-          </p>
-        )}
-        {sectionItems.map(({ ex, flatIdx }) =>
-          section === 'MAIN'
-            ? <MainSlot key={flatIdx} ex={ex} flatIdx={flatIdx} onRemove={onRemove} onChange={onChange} />
-            : <WarmCoolSlot key={flatIdx} ex={ex} flatIdx={flatIdx} onRemove={onRemove} onChange={onChange} />
-        )}
-      </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={sectionItems.map(({ ex }) => ex._key)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-2">
+            {sectionItems.length === 0 && (
+              <p className="text-xs text-gray-300 text-center py-3 border border-dashed border-gray-200 rounded-lg">
+                No exercises yet
+              </p>
+            )}
+            {sectionItems.map(({ ex, flatIdx }) => (
+              <SortableSlot key={ex._key} id={ex._key}>
+                {({ dragHandleProps }) =>
+                  section === 'MAIN'
+                    ? <MainSlot ex={ex} flatIdx={flatIdx} onRemove={onRemove} onChange={onChange} dragHandleProps={dragHandleProps} />
+                    : <WarmCoolSlot ex={ex} flatIdx={flatIdx} onRemove={onRemove} onChange={onChange} dragHandleProps={dragHandleProps} />
+                }
+              </SortableSlot>
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
 
       {isPickerOpen && (
         <div className="card border-pixel-line p-3 mt-2">
@@ -131,9 +196,13 @@ export default function TemplateBuilderModal({ template, onClose }) {
 
   const [name, setName] = useState(template?.name || '')
   const [description, setDescription] = useState(template?.description || '')
-  // Flat exercises array — each item has a `section` field
+  // Flat exercises array — each item has a `section` field and a stable `_key` for dnd-kit
   const [exercises, setExercises] = useState(
-    (template?.exercises || []).map(ex => ({ ...ex, section: ex.section || 'MAIN' }))
+    (template?.exercises || []).map(ex => ({
+      ...ex,
+      section: ex.section || 'MAIN',
+      _key: crypto.randomUUID(),
+    }))
   )
   const [activePicker, setActivePicker] = useState(null) // 'WARMUP' | 'MAIN' | 'COOLDOWN' | null
   const [exSearch, setExSearch] = useState('')
@@ -161,7 +230,7 @@ export default function TemplateBuilderModal({ template, onClose }) {
   })
 
   const addExercise = (ex, section) => {
-    setExercises(prev => [...prev, { ...ex, section, prescribed_sets: '', prescribed_reps: '' }])
+    setExercises(prev => [...prev, { ...ex, section, prescribed_sets: '', prescribed_reps: '', _key: crypto.randomUUID() }])
     setActivePicker(null)
     setExSearch('')
   }
@@ -170,6 +239,22 @@ export default function TemplateBuilderModal({ template, onClose }) {
 
   const updateExercise = (flatIdx, key, val) =>
     setExercises(prev => prev.map((ex, i) => i === flatIdx ? { ...ex, [key]: val } : ex))
+
+  // Reorder within a section — rebuilds flat array grouped by section to preserve save order
+  const reorderSection = (section, activeKey, overKey) => {
+    setExercises(prev => {
+      const groups = {
+        WARMUP:   prev.filter(ex => ex.section === 'WARMUP'),
+        MAIN:     prev.filter(ex => ex.section === 'MAIN'),
+        COOLDOWN: prev.filter(ex => ex.section === 'COOLDOWN'),
+      }
+      const items = groups[section]
+      const oldIdx = items.findIndex(ex => ex._key === activeKey)
+      const newIdx = items.findIndex(ex => ex._key === overKey)
+      groups[section] = arrayMove(items, oldIdx, newIdx)
+      return [...groups.WARMUP, ...groups.MAIN, ...groups.COOLDOWN]
+    })
+  }
 
   const handleSave = () => {
     if (!name.trim()) return
@@ -195,6 +280,7 @@ export default function TemplateBuilderModal({ template, onClose }) {
     onAdd: addExercise,
     onRemove: removeExercise,
     onChange: updateExercise,
+    onReorder: reorderSection,
     exerciseResults,
     exSearch,
     setExSearch,
