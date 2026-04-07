@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Dumbbell, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Search, Dumbbell, X, ChevronDown, ChevronUp, Pencil } from 'lucide-react'
 import { exercisesApi } from '@/lib/api'
 import { useAuthStore } from '@/features/auth/store/authStore'
 import CreateExerciseModal from '../components/CreateExerciseModal.jsx'
@@ -11,8 +11,9 @@ function getYouTubeId(url) {
   return m ? m[1] : null
 }
 
-function ExerciseCard({ ex, user }) {
+function ExerciseCard({ ex, user, onEdit }) {
   const [open, setOpen] = useState(false)
+  const [demoOpen, setDemoOpen] = useState(false)
   const ytId = getYouTubeId(ex.youtube_url)
   const qc = useQueryClient()
   const isOwner = user?.id && ex.created_by === user.id
@@ -25,7 +26,7 @@ function ExerciseCard({ ex, user }) {
   return (
     <div className="card overflow-hidden">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { setOpen(o => !o); setDemoOpen(false) }}
         className="w-full flex items-start gap-3 p-4 text-left"
       >
         <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center shrink-0 mt-0.5">
@@ -51,21 +52,32 @@ function ExerciseCard({ ex, user }) {
       </button>
 
       {open && ytId && (
-        <div className="px-4 pb-4 flex justify-center">
-          <div className="relative rounded-xl overflow-hidden bg-black" style={{ width: '180px', aspectRatio: '9/16' }}>
-            <iframe
-              src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&loop=1&playlist=${ytId}&mute=1&controls=0&playsinline=1&modestbranding=1&rel=0`}
-              className="absolute inset-0 w-full h-full"
-              allow="autoplay; encrypted-media"
-              allowFullScreen
-            />
-          </div>
+        <div className="px-4 pb-3">
+          <button
+            onClick={() => setDemoOpen(o => !o)}
+            className="flex items-center gap-1.5 text-xs font-medium text-pixel-dim"
+          >
+            {demoOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            Demo
+          </button>
+          {demoOpen && (
+            <div className="flex justify-center mt-2">
+              <div className="relative rounded-xl overflow-hidden bg-black" style={{ width: '180px', aspectRatio: '9/16' }}>
+                <iframe
+                  src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&loop=1&playlist=${ytId}&mute=1&controls=0&playsinline=1&modestbranding=1&rel=0`}
+                  className="absolute inset-0 w-full h-full"
+                  allow="autoplay; encrypted-media"
+                  allowFullScreen
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {open && isOwner && (
-        <div className="px-4 pb-4 border-t border-gray-100 pt-3">
-          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer w-fit">
+        <div className="px-4 pb-4 border-t border-gray-100 pt-3 flex items-center justify-between gap-4">
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
             <input
               type="checkbox"
               checked={ex.is_public}
@@ -75,6 +87,12 @@ function ExerciseCard({ ex, user }) {
             />
             Visible to all coaches (public)
           </label>
+          <button
+            onClick={() => onEdit(ex)}
+            className="btn-ghost gap-1.5 text-sm py-1.5 shrink-0"
+          >
+            <Pencil size={13} /> Edit
+          </button>
         </div>
       )}
     </div>
@@ -85,6 +103,7 @@ export default function ExerciseLibraryPage() {
   const { user } = useAuthStore()
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
+  const [editExercise, setEditExercise] = useState(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['exercises', search],
@@ -134,11 +153,12 @@ export default function ExerciseLibraryPage() {
               <p>No exercises found</p>
             </div>
           )}
-          {data?.map(ex => <ExerciseCard key={ex.id} ex={ex} user={user} />)}
+          {data?.map(ex => <ExerciseCard key={ex.id} ex={ex} user={user} onEdit={setEditExercise} />)}
         </div>
       )}
 
       {showCreate && <CreateExerciseModal onClose={() => setShowCreate(false)} />}
+      {editExercise && <CreateExerciseModal exercise={editExercise} onClose={() => setEditExercise(null)} />}
     </div>
   )
 }

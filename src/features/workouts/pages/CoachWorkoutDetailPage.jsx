@@ -1,0 +1,175 @@
+import { useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { ArrowLeft, CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp } from 'lucide-react'
+import { coachApi } from '@/lib/api'
+import { formatDate } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+
+const STATUS = {
+  COMPLETED: { icon: CheckCircle2, color: 'text-green-500', label: 'Completed' },
+  MISSED:    { icon: XCircle,      color: 'text-red-400',   label: 'Missed' },
+  SCHEDULED: { icon: Clock,        color: 'text-blue-500',  label: 'Scheduled' },
+}
+
+function getYouTubeId(url) {
+  if (!url) return null
+  const m = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+  return m ? m[1] : null
+}
+
+function ExerciseCard({ ex }) {
+  const [demoOpen, setDemoOpen] = useState(false)
+  const ytId = getYouTubeId(ex.youtube_url)
+  const hasLog = !!ex.exercise_log
+
+  const prescribedParts = [
+    ex.prescribed_sets && ex.prescribed_reps
+      ? `${ex.prescribed_sets} × ${ex.prescribed_reps}`
+      : ex.prescribed_sets
+        ? `${ex.prescribed_sets} sets`
+        : ex.prescribed_reps
+          ? `${ex.prescribed_reps} reps`
+          : null,
+    ex.prescribed_weight ? `@ ${ex.prescribed_weight}` : null,
+    ex.prescribed_rest_secs ? `${ex.prescribed_rest_secs}s rest` : null,
+  ].filter(Boolean)
+
+  return (
+    <div className="card p-4 space-y-3">
+      <div>
+        <p className="font-semibold text-gray-900 text-sm">{ex.name}</p>
+        {prescribedParts.length > 0 && (
+          <p className="text-xs text-gray-400 mt-0.5">{prescribedParts.join(' · ')}</p>
+        )}
+      </div>
+
+      {ex.notes && (
+        <p className="text-xs text-gray-500 bg-gray-50 rounded px-3 py-2">
+          <span className="font-medium text-gray-400 uppercase tracking-wide text-[10px]">Coach note · </span>
+          {ex.notes}
+        </p>
+      )}
+
+      {ytId && (
+        <div>
+          <button
+            onClick={() => setDemoOpen(o => !o)}
+            className="flex items-center gap-1.5 text-xs font-medium text-pixel-dim"
+          >
+            {demoOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            Demo
+          </button>
+          {demoOpen && (
+            <div className="flex justify-center mt-2">
+              <div className="relative rounded-xl overflow-hidden bg-black" style={{ width: '140px', aspectRatio: '9/16' }}>
+                <iframe
+                  src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&loop=1&playlist=${ytId}&mute=1&controls=0&playsinline=1&modestbranding=1&rel=0`}
+                  className="absolute inset-0 w-full h-full"
+                  allow="autoplay; encrypted-media"
+                  allowFullScreen
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {hasLog && (
+        <div className="border-t border-gray-100 pt-3 space-y-1">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Client logged</p>
+          {ex.exercise_log.sets?.length > 0 ? (
+            <div className="space-y-1">
+              {ex.exercise_log.sets.map((s, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
+                  <span className="text-gray-400 w-10 shrink-0">Set {s.set_index + 1}</span>
+                  <span>{s.reps} reps{s.weight ? ` · ${s.weight} kg` : ''}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400">No sets logged</p>
+          )}
+          {ex.exercise_log.notes && (
+            <p className="text-xs text-gray-500 mt-2 bg-gray-50 rounded px-3 py-2">
+              <span className="font-medium text-gray-400 uppercase tracking-wide text-[10px]">Client note · </span>
+              {ex.exercise_log.notes}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Section({ label, exercises }) {
+  const items = exercises.filter(ex => ex.section === label.key)
+  if (!items.length) return null
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{label.display}</p>
+      {items.map(ex => <ExerciseCard key={ex.id} ex={ex} />)}
+    </div>
+  )
+}
+
+const SECTIONS = [
+  { key: 'WARMUP',   display: 'Warm Up' },
+  { key: 'MAIN',     display: 'Exercises' },
+  { key: 'COOLDOWN', display: 'Cool Down' },
+]
+
+export default function CoachWorkoutDetailPage() {
+  const { id } = useParams()
+  const navigate = useNavigate()
+
+  const { data: workout, isLoading } = useQuery({
+    queryKey: ['coach-workout', id],
+    queryFn: () => coachApi.getWorkout(id).then(r => r.data.data),
+  })
+
+  const { data: client } = useQuery({
+    queryKey: ['client', workout?.client_id],
+    queryFn: () => coachApi.getClient(workout.client_id).then(r => r.data.data),
+    enabled: !!workout?.client_id,
+  })
+
+  if (isLoading) return <div className="p-6 text-center text-gray-400">Loading…</div>
+  if (!workout)  return <div className="p-6 text-center text-gray-400">Workout not found</div>
+
+  const { icon: StatusIcon, color: statusColor, label: statusLabel } = STATUS[workout.status] || STATUS.SCHEDULED
+
+  return (
+    <div className="max-w-lg mx-auto px-4 py-6">
+      <button onClick={() => navigate(-1)} className="btn-ghost gap-2 mb-4 -ml-2">
+        <ArrowLeft size={16} /> Back
+      </button>
+
+      {/* Header */}
+      <div className="mb-6">
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="page-header leading-tight">{workout.name}</h1>
+          <span className={cn('flex items-center gap-1 text-xs font-medium shrink-0 mt-1', statusColor)}>
+            <StatusIcon size={14} />
+            {statusLabel}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 mt-1 text-sm text-gray-400">
+          {client && <span>{client.first_name} {client.last_name} · </span>}
+          <span>{formatDate(workout.scheduled_date)}</span>
+        </div>
+      </div>
+
+      {/* Exercise sections */}
+      <div className="space-y-6">
+        {workout.exercises?.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-10">No exercises in this workout.</p>
+        ) : (
+          SECTIONS.map(section => (
+            <Section key={section.key} label={section} exercises={workout.exercises ?? []} />
+          ))
+        )}
+      </div>
+    </div>
+  )
+}

@@ -104,7 +104,11 @@ export default function ClientDetailPage() {
           {workouts?.map(w => {
             const { icon: Icon, color, label } = STATUS[w.status] || STATUS.SCHEDULED
             return (
-              <div key={w.id} className="card p-3.5 flex items-center gap-3">
+              <div
+                key={w.id}
+                onClick={() => navigate(`/coach/workouts/${w.id}`)}
+                className="card p-3.5 flex items-center gap-3 cursor-pointer hover:shadow-md transition-shadow"
+              >
                 <Icon size={18} className={cn(color, 'shrink-0')} />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-900 text-sm truncate">{w.name}</p>
@@ -113,7 +117,7 @@ export default function ClientDetailPage() {
                 <span className={cn('text-xs font-medium shrink-0', color)}>{label}</span>
                 {w.status === 'SCHEDULED' && (
                   <button
-                    onClick={() => deleteWorkout(w.id)}
+                    onClick={e => { e.stopPropagation(); deleteWorkout(w.id) }}
                     className="text-gray-300 hover:text-red-400 p-2 transition-colors"
                   >
                     <Trash2 size={16} />
