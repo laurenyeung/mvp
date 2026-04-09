@@ -2061,31 +2061,26 @@ describe('Section 25 — Input Validation & Injection Hardening', () => {
 // SECTION 26 — Workout Log Edge Cases
 // =============================================================================
 describe('Section 26 — Workout Log Edge Cases', () => {
-  let missedWorkoutId, logOnlyWorkoutId
+  let pastWorkoutId, logOnlyWorkoutId
 
-  test('TC-WLOG-001 · Coach can mark a SCHEDULED workout as MISSED', async () => {
+  test('TC-WLOG-001 · Setting status to MISSED is rejected with 400', async () => {
     const assign = await request(app)
       .post('/api/v1/coach/workouts/assign')
       .set('Cookie', coachCookies)
-      .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: YESTERDAY, name: 'Missed_TEST' })
-    missedWorkoutId = assign.body.data.id
+      .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: YESTERDAY, name: 'PastWorkout_TEST' })
+    pastWorkoutId = assign.body.data.id
 
     const res = await request(app)
-      .patch(`/api/v1/coach/workouts/${missedWorkoutId}`)
+      .patch(`/api/v1/coach/workouts/${pastWorkoutId}`)
       .set('Cookie', coachCookies)
       .send({ status: 'MISSED' })
-    expect(res.status).toBe(200)
-    expect(res.body.data.status).toBe('MISSED')
-
-    const { rows } = await testPool.query('SELECT status FROM workouts WHERE id=$1', [missedWorkoutId])
-    expect(rows[0].status).toBe('MISSED')
+    expect(res.status).toBe(400)
   })
 
-  test('TC-WLOG-002 · Client can still log a MISSED workout (retroactive logging)', async () => {
-    // Real TrueCoach behaviour: client can log even after a workout is MISSED
-    const { rows: we } = await testPool.query('SELECT id FROM workout_exercises WHERE workout_id=$1', [missedWorkoutId])
+  test('TC-WLOG-002 · Client can log a past-date SCHEDULED workout (retroactive logging)', async () => {
+    const { rows: we } = await testPool.query('SELECT id FROM workout_exercises WHERE workout_id=$1', [pastWorkoutId])
     const res = await request(app)
-      .post(`/api/v1/client/workouts/${missedWorkoutId}/log`)
+      .post(`/api/v1/client/workouts/${pastWorkoutId}/log`)
       .set('Cookie', clientCookies)
       .send({
         overall_notes: 'Did it late',
@@ -2093,7 +2088,7 @@ describe('Section 26 — Workout Log Edge Cases', () => {
       })
     expect(res.status).toBe(201)
     // Status flips to COMPLETED
-    const { rows } = await testPool.query('SELECT status FROM workouts WHERE id=$1', [missedWorkoutId])
+    const { rows } = await testPool.query('SELECT status FROM workouts WHERE id=$1', [pastWorkoutId])
     expect(rows[0].status).toBe('COMPLETED')
   })
 

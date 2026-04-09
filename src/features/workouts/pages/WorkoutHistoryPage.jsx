@@ -6,9 +6,17 @@ import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
 const STATUS_STYLES = {
-  COMPLETED: { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50', label: 'Completed' },
-  MISSED:    { icon: XCircle,      color: 'text-red-400',   bg: 'bg-red-50',   label: 'Missed' },
-  SCHEDULED: { icon: Clock,        color: 'text-blue-500',  bg: 'bg-blue-50',  label: 'Scheduled' },
+  COMPLETED:  { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50', label: 'Completed' },
+  SCHEDULED:  { icon: Clock,        color: 'text-blue-500',  bg: 'bg-blue-50',  label: 'Scheduled' },
+  INCOMPLETE: { icon: XCircle,      color: 'text-red-500',   bg: 'bg-red-50',   label: 'Incomplete' },
+}
+
+function resolveStatus(w) {
+  if (w.status === 'SCHEDULED' && w.scheduled_date) {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    if (new Date(w.scheduled_date) < today) return 'INCOMPLETE'
+  }
+  return w.status
 }
 
 export default function WorkoutHistoryPage() {
@@ -41,7 +49,7 @@ export default function WorkoutHistoryPage() {
       ) : (
         <div className="space-y-2">
           {workouts?.map(w => {
-            const { icon: Icon, color, bg, label } = STATUS_STYLES[w.status] || STATUS_STYLES.SCHEDULED
+            const { icon: Icon, color, bg, label } = STATUS_STYLES[resolveStatus(w)] || STATUS_STYLES.SCHEDULED
             return (
               <div key={w.id} className="card p-4 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => navigate(`/client/workouts/${w.id}/log`)}>
                 <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', bg)}>

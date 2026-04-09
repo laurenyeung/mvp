@@ -7,9 +7,17 @@ import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
 const STATUS = {
-  COMPLETED: { icon: CheckCircle2, color: 'text-green-500', label: 'Completed' },
-  MISSED:    { icon: XCircle,      color: 'text-red-400',   label: 'Missed' },
-  SCHEDULED: { icon: Clock,        color: 'text-blue-500',  label: 'Scheduled' },
+  COMPLETED:  { icon: CheckCircle2, color: 'text-green-500', label: 'Completed' },
+  SCHEDULED:  { icon: Clock,        color: 'text-blue-500',  label: 'Scheduled' },
+  INCOMPLETE: { icon: XCircle,      color: 'text-red-500',   label: 'Incomplete' },
+}
+
+function resolveStatus(status, scheduled_date) {
+  if (status === 'SCHEDULED' && scheduled_date) {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    if (new Date(scheduled_date) < today) return 'INCOMPLETE'
+  }
+  return status
 }
 
 function getYouTubeId(url) {
@@ -149,7 +157,8 @@ export default function CoachWorkoutDetailPage() {
   if (isLoading) return <div className="p-6 text-center text-gray-400">Loading…</div>
   if (!workout)  return <div className="p-6 text-center text-gray-400">Workout not found</div>
 
-  const { icon: StatusIcon, color: statusColor, label: statusLabel } = STATUS[workout.status] || STATUS.SCHEDULED
+  const resolved = resolveStatus(workout.status, workout.scheduled_date)
+  const { icon: StatusIcon, color: statusColor, label: statusLabel } = STATUS[resolved] || STATUS.SCHEDULED
   const canEdit = workout.status === 'SCHEDULED'
 
   function startEditDate() {
