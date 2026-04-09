@@ -1862,6 +1862,15 @@ describe('Section 23 — Messaging Edge Cases', () => {
     const res = await request(app).get('/api/v1/messages/threads')
     expect(res.status).toBe(401)
   })
+
+  test('TC-MSG-011 · Non-participant cannot read thread detail (403)', async () => {
+    // coach2 is not part of the thread created between coach1 and client
+    const res = await request(app)
+      .get(`/api/v1/messages/threads/${threadId}`)
+      .set('Cookie', coach2Cookies)
+    expect(res.status).toBe(403)
+    expect(res.body.error.code).toBe('FORBIDDEN')
+  })
 })
 
 // =============================================================================
