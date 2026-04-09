@@ -49,6 +49,24 @@ router.get('/threads/:threadId', async (req, res, next) => {
     const idParsed = uuidSchema.safeParse(req.params.threadId)
     if (!idParsed.success) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Thread not found' } })
 
+    // Verify the requester is a participant in this thread
+    const { rows: threadRows } = await query(
+      `SELECT mt.*,
+              cp_coach.user_id  AS coach_user_id,
+              cp_client.user_id AS client_user_id
+       FROM message_threads mt
+       JOIN coach_profiles  cp_coach  ON cp_coach.id  = mt.coach_id
+       JOIN client_profiles cp_client ON cp_client.id = mt.client_id
+       WHERE mt.id=$1`,
+      [idParsed.data]
+    )
+    if (!threadRows.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Thread not found' } })
+    const t = threadRows[0]
+    if (t.coach_user_id !== req.user.id && t.client_user_id !== req.user.id) {
+      logger.warn('MESSAGE_ACCESS_DENIED', { userId: req.user.id, threadId: idParsed.data, requestId: req.id })
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not a participant in this thread' } })
+    }
+
     // Clamp limit to 1–100 — prevents fetching entire message history in one shot
     const rawLimit = parseInt(req.query.limit, 10)
     const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 30
