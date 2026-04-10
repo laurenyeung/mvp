@@ -64,10 +64,15 @@ export const coachApi = {
   addWorkoutComment:   (workoutId, body)   => api.post(`/coach/workouts/${workoutId}/comments`, body),
 }
 
+function localDateStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export const clientApi = {
-  todayWorkout:    ()       => api.get('/client/workouts/today'),
-  upcomingWorkouts:()       => api.get('/client/workouts/upcoming'),
-  pastWorkouts:    ()       => api.get('/client/workouts/past'),
+  todayWorkout:    ()       => api.get('/client/workouts/today',    { params: { date: localDateStr() } }),
+  upcomingWorkouts:()       => api.get('/client/workouts/upcoming', { params: { date: localDateStr() } }),
+  pastWorkouts:    ()       => api.get('/client/workouts/past',     { params: { date: localDateStr() } }),
   listWorkouts:    (params) => api.get('/client/workouts', { params }),
   getWorkout:      (id)     => api.get(`/client/workouts/${id}`),
   logWorkout:      (workoutId, body) => api.post(`/client/workouts/${workoutId}/log`, body),
