@@ -323,34 +323,12 @@ export default function WorkoutLogPage() {
       </button>
 
       <h1 className="page-header mb-1">{workout.name}</h1>
-      <div className="flex items-center gap-2 text-sm text-gray-400 mb-5">
-        <span>{workout.exercises?.length ?? 0} exercises</span>
-        {workout.scheduled_date && (
-          <>
-            <span>·</span>
-            {isRequestingReschedule ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  value={rescheduleDate}
-                  onChange={e => setRescheduleDate(e.target.value)}
-                  className="input text-sm py-1 px-2 h-7 w-auto"
-                />
-                <button
-                  onClick={() => submitReschedule()}
-                  disabled={isReschedulePending || !rescheduleDate}
-                  className="btn-primary py-1 px-2.5 text-xs"
-                >
-                  {isReschedulePending ? 'Sending…' : 'Request'}
-                </button>
-                <button
-                  onClick={() => setIsRequestingReschedule(false)}
-                  className="btn-ghost py-1 px-2 text-xs"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
+      <div className="text-sm text-gray-400 mb-5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span>{workout.exercises?.length ?? 0} exercises</span>
+          {workout.scheduled_date && (
+            <>
+              <span>·</span>
               <span className="flex items-center gap-1.5">
                 {new Date(workout.scheduled_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
                 {workout.status === 'SCHEDULED' && (
@@ -358,7 +336,7 @@ export default function WorkoutLogPage() {
                     <span className="text-xs text-amber-500 font-medium">Reschedule requested</span>
                   ) : rescheduleSuccess ? (
                     <span className="text-xs text-green-500 font-medium">Request sent!</span>
-                  ) : (
+                  ) : !isRequestingReschedule && (
                     <button
                       onClick={() => { setRescheduleDate(''); setIsRequestingReschedule(true) }}
                       className="text-gray-500 hover:text-pixel-accent transition-colors"
@@ -369,8 +347,32 @@ export default function WorkoutLogPage() {
                   )
                 )}
               </span>
-            )}
-          </>
+            </>
+          )}
+        </div>
+        {isRequestingReschedule && (
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <input
+              type="date"
+              value={rescheduleDate}
+              onChange={e => setRescheduleDate(e.target.value)}
+              className="input text-sm py-1 px-2 h-8"
+              style={{ width: '9.5rem' }}
+            />
+            <button
+              onClick={() => submitReschedule()}
+              disabled={isReschedulePending || !rescheduleDate}
+              className="btn-primary py-1 px-3 text-xs shrink-0"
+            >
+              {isReschedulePending ? 'Sending…' : 'Request'}
+            </button>
+            <button
+              onClick={() => setIsRequestingReschedule(false)}
+              className="btn-ghost py-1 px-2 text-xs shrink-0"
+            >
+              Cancel
+            </button>
+          </div>
         )}
       </div>
 
