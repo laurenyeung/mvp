@@ -10,6 +10,11 @@ DO $$ BEGIN
   CREATE TYPE media_type_enum   AS ENUM ('VIDEO','IMAGE');
   CREATE TYPE media_rel_type    AS ENUM ('EXERCISE_LOG','PROGRESS','MESSAGE');
   CREATE TYPE metric_type_enum  AS ENUM ('WEIGHT','BODY_FAT','WAIST','CUSTOM');
+  -- notif_type: user-facing notification events (drives the notifications table)
+  -- activity_type: coach-visible activity feed events (drives the activity table)
+  -- Overlap (COMMENT_ADDED, WORKOUT_COMPLETED, etc.) is intentional — both enums track
+  -- the same underlying events but are kept separate so each can evolve independently
+  -- (e.g. a notif type like WORKOUT_REMINDER has no activity equivalent and vice versa).
   CREATE TYPE notif_type        AS ENUM ('WORKOUT_ASSIGNED','WORKOUT_REMINDER','WORKOUT_COMPLETED','NEW_MESSAGE','VIDEO_UPLOADED','COMMENT_ADDED');
   CREATE TYPE activity_type     AS ENUM ('WORKOUT_COMPLETED','COMMENT_ADDED','VIDEO_UPLOADED','WORKOUT_ASSIGNED');
 EXCEPTION WHEN duplicate_object THEN NULL;

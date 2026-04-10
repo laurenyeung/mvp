@@ -418,6 +418,12 @@ router.post('/workouts/assign', async (req, res, next) => {
     // Use coach-provided overrides if supplied, otherwise fall back to template defaults
     let exercisesToInsert
     if (exerciseOverrides && exerciseOverrides.length > 0) {
+      const overrideIds = exerciseOverrides.map(ex => ex.exercise_id)
+      const uniqueIds = [...new Set(overrideIds)]
+      const { rows: validExs } = await query('SELECT id FROM exercises WHERE id = ANY($1::uuid[])', [uniqueIds])
+      if (validExs.length !== uniqueIds.length)
+        return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'One or more exercise_ids are invalid' } })
+
       exercisesToInsert = exerciseOverrides.map((ex, i) => ({
         exercise_id: ex.exercise_id,
         order_index: ex.order_index ?? i,
