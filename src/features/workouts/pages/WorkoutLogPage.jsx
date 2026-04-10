@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useCallback } from 'react'
-import { CheckCircle2, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, ArrowLeft, Pencil } from 'lucide-react'
 import { clientApi } from '@/lib/api'
 
 function SetRow({ set, index, onChange, showWeight, label }) {
@@ -220,6 +220,9 @@ export default function WorkoutLogPage() {
   const [initialized, setInitialized] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [done, setDone] = useState(false)
+  const [isRequestingReschedule, setIsRequestingReschedule] = useState(false)
+  const [rescheduleDate, setRescheduleDate] = useState('')
+  const [rescheduleSuccess, setRescheduleSuccess] = useState(false)
 
   if (workout && !initialized) {
     setLogState(initLogs(workout.exercises))
@@ -256,6 +259,14 @@ export default function WorkoutLogPage() {
     onError: (err) => {
       const msg = err.response?.data?.error?.message
       setSubmitError(msg || 'Failed to save workout. Please try again.')
+    },
+  })
+
+  const { mutate: submitReschedule, isPending: isReschedulePending } = useMutation({
+    mutationFn: () => clientApi.requestReschedule(id, { requested_date: rescheduleDate }),
+    onSuccess: () => {
+      setIsRequestingReschedule(false)
+      setRescheduleSuccess(true)
     },
   })
 
@@ -312,9 +323,56 @@ export default function WorkoutLogPage() {
       </button>
 
       <h1 className="page-header mb-1">{workout.name}</h1>
-      <p className="text-sm text-gray-400 mb-5">
-        {workout.exercises?.length ?? 0} exercises
-      </p>
+      <div className="flex items-center gap-2 text-sm text-gray-400 mb-5">
+        <span>{workout.exercises?.length ?? 0} exercises</span>
+        {workout.scheduled_date && (
+          <>
+            <span>·</span>
+            {isRequestingReschedule ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={rescheduleDate}
+                  onChange={e => setRescheduleDate(e.target.value)}
+                  className="input text-sm py-1 px-2 h-7 w-auto"
+                />
+                <button
+                  onClick={() => submitReschedule()}
+                  disabled={isReschedulePending || !rescheduleDate}
+                  className="btn-primary py-1 px-2.5 text-xs"
+                >
+                  {isReschedulePending ? 'Sending…' : 'Request'}
+                </button>
+                <button
+                  onClick={() => setIsRequestingReschedule(false)}
+                  className="btn-ghost py-1 px-2 text-xs"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                {new Date(workout.scheduled_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+                {workout.status === 'SCHEDULED' && (
+                  workout.pending_reschedule ? (
+                    <span className="text-xs text-amber-500 font-medium">Reschedule requested</span>
+                  ) : rescheduleSuccess ? (
+                    <span className="text-xs text-green-500 font-medium">Request sent!</span>
+                  ) : (
+                    <button
+                      onClick={() => { setRescheduleDate(''); setIsRequestingReschedule(true) }}
+                      className="text-gray-500 hover:text-pixel-accent transition-colors"
+                      aria-label="Request date change"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                  )
+                )}
+              </span>
+            )}
+          </>
+        )}
+      </div>
 
       {(() => {
         const warmup   = workout.exercises?.filter(ex => ex.section === 'WARMUP')   || []

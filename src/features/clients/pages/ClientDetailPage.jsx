@@ -127,6 +127,9 @@ export default function ClientDetailPage() {
                   <p className="text-xs text-gray-400">{formatDate(w.scheduled_date)}</p>
                 </div>
                 <span className={cn('text-xs font-medium shrink-0', color)}>{label}</span>
+                {w.has_pending_reschedule && (
+                  <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title="Reschedule requested" />
+                )}
                 {(w.status === 'SCHEDULED' || resolveStatus(w) === 'INCOMPLETE') && (
                   <button
                     onClick={e => { e.stopPropagation(); deleteWorkout(w.id) }}

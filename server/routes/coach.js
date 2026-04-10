@@ -272,7 +272,7 @@ router.get('/clients', async (req, res, next) => {
     const { rows } = await query(
       `SELECT cp.id, u.id AS user_id, u.email, u.first_name, u.last_name,
               u.profile_image_url, cp.goals, cp.notes,
-              COUNT(w.id) FILTER (WHERE w.status='SCHEDULED') AS upcoming_workouts
+              COUNT(w.id) FILTER (WHERE w.status='SCHEDULED' AND w.scheduled_date >= CURRENT_DATE) AS upcoming_workouts
        FROM client_profiles cp
        JOIN users u ON u.id = cp.user_id
        LEFT JOIN workouts w ON w.client_id = cp.id
@@ -323,7 +323,9 @@ router.get('/clients/:clientId/workouts', async (req, res, next) => {
     if (to)     { params.push(to);     where += ` AND w.scheduled_date<=$${params.length}` }
 
     const { rows } = await query(
-      `SELECT w.* FROM workouts w WHERE ${where} ORDER BY w.scheduled_date DESC`,
+      `SELECT w.*,
+              EXISTS(SELECT 1 FROM reschedule_requests rr WHERE rr.workout_id=w.id AND rr.status='PENDING') AS has_pending_reschedule
+       FROM workouts w WHERE ${where} ORDER BY w.scheduled_date DESC`,
       params
     )
     res.json({ data: rows })
@@ -595,6 +597,16 @@ router.get('/workouts/:id', async (req, res, next) => {
       }
     }
 
+    const { rows: rrRows } = await query(
+      `SELECT rr.id, rr.requested_date, u.first_name, u.last_name
+       FROM reschedule_requests rr JOIN users u ON u.id = rr.requested_by
+       WHERE rr.workout_id=$1 AND rr.status='PENDING' ORDER BY rr.created_at DESC LIMIT 1`,
+      [idParsed.data]
+    )
+    workout.pending_reschedule = rrRows.length
+      ? { id: rrRows[0].id, requested_date: rrRows[0].requested_date, client_name: `${rrRows[0].first_name} ${rrRows[0].last_name}` }
+      : null
+
     res.json({ data: workout })
   } catch (err) { next(err) }
 })
@@ -623,6 +635,45 @@ router.patch('/workouts/:id', async (req, res, next) => {
     if (!rows.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Workout not found' } })
     logger.info('WORKOUT_UPDATED', { workoutId: idParsed.data, coachId, fields: Object.keys(parsed.data), requestId: req.id })
     res.json({ data: rows[0] })
+  } catch (err) { next(err) }
+})
+
+// ── POST /coach/workouts/:workoutId/reschedule-requests/:reqId/respond ───────
+router.post('/workouts/:workoutId/reschedule-requests/:reqId/respond', async (req, res, next) => {
+  try {
+    const workoutIdParsed = uuidSchema.safeParse(req.params.workoutId)
+    const reqIdParsed = uuidSchema.safeParse(req.params.reqId)
+    if (!workoutIdParsed.success || !reqIdParsed.success)
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Not found' } })
+
+    const { action } = req.body
+    if (action !== 'accept' && action !== 'decline')
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'action must be accept or decline' } })
+
+    const coachId = await getCoachProfileId(req.user.id)
+
+    // Verify coach owns workout and request is PENDING for that workout
+    const { rows: rrRows } = await query(
+      `SELECT rr.id, rr.requested_date FROM reschedule_requests rr
+       JOIN workouts w ON w.id = rr.workout_id
+       WHERE rr.id=$1 AND rr.workout_id=$2 AND w.coach_id=$3 AND rr.status='PENDING'`,
+      [reqIdParsed.data, workoutIdParsed.data, coachId]
+    )
+    if (!rrRows.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Pending request not found' } })
+
+    if (action === 'accept') {
+      await query(
+        `UPDATE workouts SET scheduled_date=$1 WHERE id=$2`,
+        [rrRows[0].requested_date, workoutIdParsed.data]
+      )
+    }
+    await query(
+      `UPDATE reschedule_requests SET status=$1 WHERE id=$2`,
+      [action === 'accept' ? 'ACCEPTED' : 'DECLINED', reqIdParsed.data]
+    )
+
+    logger.info('RESCHEDULE_RESPONDED', { action, reqId: reqIdParsed.data, coachId, requestId: req.id })
+    res.json({ data: { message: action === 'accept' ? 'Date updated' : 'Request declined' } })
   } catch (err) { next(err) }
 })
 

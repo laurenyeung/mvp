@@ -161,6 +161,15 @@ router.get('/workouts/:workoutId', async (req, res, next) => {
       }
     }
 
+    const { rows: rrRows } = await query(
+      `SELECT requested_date FROM reschedule_requests
+       WHERE workout_id=$1 AND status='PENDING' ORDER BY created_at DESC LIMIT 1`,
+      [idParsed.data]
+    )
+    workout.pending_reschedule = rrRows.length
+      ? { requested_date: rrRows[0].requested_date }
+      : null
+
     res.json({ data: workout })
   } catch (err) { next(err) }
 })
@@ -493,6 +502,48 @@ router.patch('/notifications/:id/read', async (req, res, next) => {
     )
     if (!rows.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Notification not found' } })
     res.json({ data: rows[0] })
+  } catch (err) { next(err) }
+})
+
+// POST /client/workouts/:workoutId/request-reschedule
+router.post('/workouts/:workoutId/request-reschedule', async (req, res, next) => {
+  try {
+    const idParsed = uuidSchema.safeParse(req.params.workoutId)
+    if (!idParsed.success) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Workout not found' } })
+
+    const { requested_date } = req.body
+    if (!requested_date || !/^\d{4}-\d{2}-\d{2}$/.test(requested_date)) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'requested_date must be YYYY-MM-DD' } })
+    }
+
+    const clientId = await getClientProfileId(req.user.id)
+
+    // Verify workout belongs to this client and is SCHEDULED
+    const { rows: wRows } = await query(
+      `SELECT id, status FROM workouts WHERE id=$1 AND client_id=$2`,
+      [idParsed.data, clientId]
+    )
+    if (!wRows.length) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Workout not found' } })
+    if (wRows[0].status !== 'SCHEDULED') {
+      return res.status(400).json({ error: { code: 'INVALID_STATUS', message: 'Can only request reschedule for scheduled workouts' } })
+    }
+
+    // Block duplicate pending requests
+    const { rows: existing } = await query(
+      `SELECT id FROM reschedule_requests WHERE workout_id=$1 AND status='PENDING'`,
+      [idParsed.data]
+    )
+    if (existing.length) {
+      return res.status(409).json({ error: { code: 'ALREADY_PENDING', message: 'A reschedule request is already pending for this workout' } })
+    }
+
+    await query(
+      `INSERT INTO reschedule_requests (workout_id, requested_by, requested_date) VALUES ($1,$2,$3)`,
+      [idParsed.data, req.user.id, requested_date]
+    )
+
+    logger.info('RESCHEDULE_REQUEST', { workoutId: idParsed.data, clientId, requestedDate: requested_date, requestId: req.id })
+    res.json({ data: { message: 'Reschedule request sent to your coach' } })
   } catch (err) { next(err) }
 })
 

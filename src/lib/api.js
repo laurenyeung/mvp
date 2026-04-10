@@ -55,6 +55,8 @@ export const coachApi = {
   getWorkout:     (id)        => api.get(`/coach/workouts/${id}`),
   updateWorkout:  (id, body)  => api.patch(`/coach/workouts/${id}`, body),
   deleteWorkout:  (id)        => api.delete(`/coach/workouts/${id}`),
+  respondRescheduleRequest: (workoutId, reqId, body) =>
+    api.post(`/coach/workouts/${workoutId}/reschedule-requests/${reqId}/respond`, body),
 
   // Workout exercise prescriptions
   updateWorkoutExercise: (id, body) => api.patch(`/coach/workout-exercises/${id}`, body),
@@ -75,7 +77,8 @@ export const clientApi = {
   pastWorkouts:    ()       => api.get('/client/workouts/past',     { params: { date: localDateStr() } }),
   listWorkouts:    (params) => api.get('/client/workouts', { params }),
   getWorkout:      (id)     => api.get(`/client/workouts/${id}`),
-  logWorkout:      (workoutId, body) => api.post(`/client/workouts/${workoutId}/log`, body),
+  logWorkout:           (workoutId, body) => api.post(`/client/workouts/${workoutId}/log`, body),
+  requestReschedule:    (workoutId, body) => api.post(`/client/workouts/${workoutId}/request-reschedule`, body),
 
   // Media
   uploadExerciseMedia: (exerciseLogId, body) =>
