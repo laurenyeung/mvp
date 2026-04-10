@@ -12,10 +12,14 @@ const STATUS = {
   INCOMPLETE: { icon: XCircle,      color: 'text-red-500',   label: 'Incomplete' },
 }
 
+function localToday() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function resolveStatus(status, scheduled_date) {
   if (status === 'SCHEDULED' && scheduled_date) {
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    if (new Date(scheduled_date) < today) return 'INCOMPLETE'
+    if (scheduled_date < localToday()) return 'INCOMPLETE'
   }
   return status
 }
@@ -53,20 +57,19 @@ function ExerciseCard({ ex }) {
       </div>
 
       {ex.notes && (
-        <p className="text-xs text-gray-500 bg-gray-50 rounded px-3 py-2">
-          <span className="font-medium text-gray-400 uppercase tracking-wide text-[10px]">Coach note · </span>
-          {ex.notes}
+        <p className="text-xs bg-gray-50 rounded-lg px-3 py-2 text-gray-600">
+          <span className="font-medium text-gray-400">Coach's Notes: </span>{ex.notes}
         </p>
       )}
 
       {ytId && (
-        <div>
+        <>
           <button
             onClick={() => setDemoOpen(o => !o)}
-            className="flex items-center gap-1.5 text-xs font-medium text-pixel-dim"
+            className="w-full flex items-center justify-between bg-orange-50 rounded-lg px-3 py-2"
           >
-            {demoOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-            Demo
+            <p className="text-xs font-medium text-orange-600">Example Video</p>
+            {demoOpen ? <ChevronUp size={13} className="text-orange-400" /> : <ChevronDown size={13} className="text-orange-400" />}
           </button>
           {demoOpen && (
             <div className="flex justify-center mt-2">
@@ -80,7 +83,7 @@ function ExerciseCard({ ex }) {
               </div>
             </div>
           )}
-        </div>
+        </>
       )}
 
       {hasLog && (
@@ -91,7 +94,7 @@ function ExerciseCard({ ex }) {
               {ex.exercise_log.sets.map((s, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
                   <span className="text-gray-400 w-10 shrink-0">Set {s.set_index + 1}</span>
-                  <span>{s.reps} reps{s.weight ? ` · ${s.weight} kg` : ''}</span>
+                  <span>{s.reps} reps{s.weight ? ` · ${s.weight} lb` : ''}</span>
                 </div>
               ))}
             </div>

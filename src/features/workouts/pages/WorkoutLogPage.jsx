@@ -12,7 +12,7 @@ function SetRow({ set, index, onChange, showWeight, label }) {
         <input
           value={set.weight ?? ''}
           onChange={e => onChange(index, 'weight', e.target.value)}
-          placeholder="kg"
+          placeholder="lb"
           className="input text-center text-sm py-2"
           type="text"
           inputMode="decimal"
@@ -39,33 +39,44 @@ function getYouTubeId(url) {
 function WarmCoolCard({ ex }) {
   const [open, setOpen] = useState(true)
   const [demoOpen, setDemoOpen] = useState(false)
+  const [done, setDone] = useState(false)
   const ytId = getYouTubeId(ex.youtube_url)
 
   return (
     <div className="card overflow-hidden">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between p-4"
-      >
-        <p className="font-semibold text-gray-900 text-sm text-left">{ex.name}</p>
-        {open
-          ? <ChevronUp size={16} className="text-gray-400 shrink-0" />
-          : <ChevronDown size={16} className="text-gray-400 shrink-0" />}
-      </button>
+      <div className="flex items-center px-4 py-3 gap-3">
+        <input
+          type="checkbox"
+          checked={done}
+          onChange={e => setDone(e.target.checked)}
+          className="w-4 h-4 rounded accent-green-500 shrink-0 cursor-pointer"
+        />
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="flex-1 flex items-center justify-between min-w-0"
+        >
+          <p className={`font-semibold text-sm text-left ${done ? 'line-through text-gray-300' : 'text-gray-900'}`}>{ex.name}</p>
+          {open
+            ? <ChevronUp size={16} className="text-gray-400 shrink-0 ml-2" />
+            : <ChevronDown size={16} className="text-gray-400 shrink-0 ml-2" />}
+        </button>
+      </div>
 
       {open && (
         <div className="px-4 pb-4 space-y-2">
           {ex.notes && (
-            <p className="text-xs text-gray-500">{ex.notes}</p>
+            <p className="text-xs bg-gray-50 rounded-lg px-3 py-2 text-gray-600">
+              <span className="font-medium text-gray-400">Coach's Notes: </span>{ex.notes}
+            </p>
           )}
           {ytId && (
-            <div>
+            <>
               <button
                 onClick={() => setDemoOpen(o => !o)}
-                className="flex items-center gap-1.5 text-xs font-medium text-brand-600 py-1"
+                className="w-full flex items-center justify-between bg-orange-50 rounded-lg px-3 py-2"
               >
-                {demoOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                Demo available
+                <p className="text-xs font-medium text-orange-600">Example Video</p>
+                {demoOpen ? <ChevronUp size={13} className="text-orange-400" /> : <ChevronDown size={13} className="text-orange-400" />}
               </button>
               {demoOpen && (
                 <div className="flex justify-center mt-1">
@@ -79,7 +90,7 @@ function WarmCoolCard({ ex }) {
                   </div>
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
       )}
@@ -123,21 +134,18 @@ function ExercisePanel({ ex, sets, notes, onSetChange, onNotesChange, readOnly }
       {open && (
         <div className="px-4 pb-4 space-y-2">
           {ex.notes && (
-            <div className="bg-gray-50 rounded-lg px-3 py-2">
-              <p className="text-xs font-medium text-gray-400 mb-0.5">Coach's Notes</p>
-              <p className="text-xs text-gray-600">{ex.notes}</p>
-            </div>
+            <p className="text-xs bg-gray-50 rounded-lg px-3 py-2 text-gray-600">
+              <span className="font-medium text-gray-400">Coach's Notes: </span>{ex.notes}
+            </p>
           )}
           {ytId && (
-            <div>
+            <>
               <button
                 onClick={() => setDemoOpen(o => !o)}
-                className="flex items-center gap-1.5 text-xs font-medium text-brand-600 py-1"
+                className="w-full flex items-center justify-between bg-orange-50 rounded-lg px-3 py-2"
               >
-                {demoOpen
-                  ? <ChevronUp size={13} />
-                  : <ChevronDown size={13} />}
-                Demo available
+                <p className="text-xs font-medium text-orange-600">Example Video</p>
+                {demoOpen ? <ChevronUp size={13} className="text-orange-400" /> : <ChevronDown size={13} className="text-orange-400" />}
               </button>
               {demoOpen && (
                 <div className="flex justify-center mt-1">
@@ -151,19 +159,21 @@ function ExercisePanel({ ex, sets, notes, onSetChange, onNotesChange, readOnly }
                   </div>
                 </div>
               )}
-            </div>
+            </>
           )}
           {!readOnly && sets.length > 0 && (
-            <>
-              <div className={`grid gap-2 text-xs text-gray-400 font-medium text-center mb-1 ${showWeight ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                <span>Set</span>
-                {showWeight && <span>Weight</span>}
-                <span>Reps</span>
+            <div className="flex flex-col items-center">
+              <div className={`w-full max-w-xs`}>
+                <div className={`grid gap-2 text-xs text-gray-400 font-medium text-center mb-1 ${showWeight ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                  <span>Set</span>
+                  {showWeight && <span>Weight</span>}
+                  <span>Reps</span>
+                </div>
+                {sets.map((set, i) => (
+                  <SetRow key={i} set={set} index={i} onChange={onSetChange} showWeight={showWeight} label={setLabel(i, ex.log_bilateral)} />
+                ))}
               </div>
-              {sets.map((set, i) => (
-                <SetRow key={i} set={set} index={i} onChange={onSetChange} showWeight={showWeight} label={setLabel(i, ex.log_bilateral)} />
-              ))}
-            </>
+            </div>
           )}
           {!readOnly && (
             <textarea

@@ -11,10 +11,14 @@ const STATUS = {
   INCOMPLETE: { icon: XCircle,      color: 'text-red-500',   label: 'Incomplete' },
 }
 
+function localToday() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function resolveStatus(w) {
   if (w.status === 'SCHEDULED' && w.scheduled_date) {
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    if (new Date(w.scheduled_date) < today) return 'INCOMPLETE'
+    if (w.scheduled_date < localToday()) return 'INCOMPLETE'
   }
   return w.status
 }

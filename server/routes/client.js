@@ -46,7 +46,7 @@ router.get('/workouts/today', async (req, res, next) => {
     const { rows: cpRows } = await query('SELECT id FROM client_profiles WHERE user_id=$1', [req.user.id])
     if (!cpRows.length) return res.json({ data: [] })
     const clientId = cpRows[0].id
-    const today = new Date().toISOString().split('T')[0]
+    const today = req.query.date || new Date().toISOString().split('T')[0]
     const { rows } = await query(
       `SELECT * FROM workouts WHERE client_id=$1 AND scheduled_date=$2 ORDER BY created_at ASC`,
       [clientId, today]
@@ -62,7 +62,7 @@ router.get('/workouts/upcoming', async (req, res, next) => {
     const { rows: cpUp } = await query('SELECT id FROM client_profiles WHERE user_id=$1', [req.user.id])
     if (!cpUp.length) return res.json({ data: [] })
     const clientId = cpUp[0].id
-    const today = new Date().toISOString().split('T')[0]
+    const today = req.query.date || new Date().toISOString().split('T')[0]
     const { rows } = await query(
       `SELECT * FROM workouts
        WHERE client_id=$1 AND scheduled_date > $2 AND status='SCHEDULED'
@@ -80,7 +80,7 @@ router.get('/workouts/past', async (req, res, next) => {
     const { rows: cpPast } = await query('SELECT id FROM client_profiles WHERE user_id=$1', [req.user.id])
     if (!cpPast.length) return res.json({ data: [] })
     const clientId = cpPast[0].id
-    const today = new Date().toISOString().split('T')[0]
+    const today = req.query.date || new Date().toISOString().split('T')[0]
     const { rows } = await query(
       `SELECT * FROM workouts
        WHERE client_id=$1 AND (scheduled_date < $2 OR status = 'COMPLETED')

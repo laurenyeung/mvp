@@ -38,7 +38,7 @@ function ExerciseCard({ ex, user, onEdit }) {
             <p className={`text-xs text-gray-400 mt-1 ${open ? '' : 'line-clamp-2'}`}>{ex.description}</p>
           )}
           {ytId && !open && (
-            <p className="text-xs text-pixel-dim mt-1 font-medium">▶ Demo available</p>
+            <p className="text-xs text-pixel-dim mt-1 font-medium">▶ Example Video</p>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -55,10 +55,10 @@ function ExerciseCard({ ex, user, onEdit }) {
         <div className="px-4 pb-3">
           <button
             onClick={() => setDemoOpen(o => !o)}
-            className="flex items-center gap-1.5 text-xs font-medium text-pixel-dim"
+            className="w-full flex items-center justify-between bg-orange-50 rounded-lg px-3 py-2"
           >
-            {demoOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-            Demo
+            <p className="text-xs font-medium text-orange-600">Example Video</p>
+            {demoOpen ? <ChevronUp size={13} className="text-orange-400" /> : <ChevronDown size={13} className="text-orange-400" />}
           </button>
           {demoOpen && (
             <div className="flex justify-center mt-2">
