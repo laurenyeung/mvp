@@ -146,6 +146,13 @@ describe('Section 1 — Authentication', () => {
     expect(res.body.data.user.email).toBe(COACH_EMAIL)
     expect(res.body.data.user.password_hash).toBeUndefined()
   })
+
+  test('TC-AUTH-CORS · Request from unknown origin is rejected with 403', async () => {
+    const res = await request(app)
+      .get('/api/v1/auth/me')
+      .set('Origin', 'https://attacker.example.com')
+    expect(res.status).toBe(403)
+  })
 })
 
 // =============================================================================
@@ -479,6 +486,29 @@ describe('Section 3 — Workout Templates', () => {
     expect(res.body.error.message).toMatch(/already exists/i)
   })
 
+  test('TC-TEMPLATE-008 · Same exercise_id can appear in multiple sections (WARMUP + MAIN)', async () => {
+    // Intentional behaviour: duplicate exercise_ids are allowed across sections
+    const res = await request(app)
+      .post('/api/v1/coach/templates')
+      .set('Cookie', coachCookies)
+      .send({
+        name: 'DuplicateEx_TEST',
+        exercises: [
+          { exercise_id: exerciseId, section: 'WARMUP', order_index: 0 },
+          { exercise_id: exerciseId, section: 'MAIN',   order_index: 1, prescribed_sets: 3 },
+        ],
+      })
+    expect(res.status).toBe(201)
+    const tmplId = res.body.data.id
+    const { rows } = await testPool.query(
+      'SELECT section FROM workout_template_exercises WHERE workout_template_id=$1 ORDER BY order_index',
+      [tmplId]
+    )
+    expect(rows).toHaveLength(2)
+    expect(rows[0].section).toBe('WARMUP')
+    expect(rows[1].section).toBe('MAIN')
+  })
+
 })
 
 // =============================================================================
@@ -614,6 +644,28 @@ describe('Section 4 — Workout Assignment', () => {
     )
     expect(we).toHaveLength(1)
     expect(we[0].log_weight).toBe(true)
+  })
+
+  test('TC-ASSIGN-007 · Invalid exercise_id in overrides returns 400 before transaction', async () => {
+    const fakeExerciseId = '00000000-0000-0000-0000-000000000000'
+    const res = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Cookie', coachCookies)
+      .send({
+        template_id: templateId,
+        client_id: clientProfileId,
+        scheduled_date: YESTERDAY,
+        exercises: [{ exercise_id: fakeExerciseId, order_index: 0 }],
+      })
+    expect(res.status).toBe(400)
+    expect(res.body.error.code).toBe('VALIDATION_ERROR')
+    // Confirm no orphaned workout row was created
+    const { rows } = await testPool.query('SELECT id FROM workouts WHERE name=$1', ['Lower Body Day Updated'])
+    // workouts from prior tests exist; confirm no new row was added with the fake exercise
+    const { rows: we } = await testPool.query(
+      'SELECT id FROM workout_exercises WHERE exercise_id=$1', [fakeExerciseId]
+    )
+    expect(we).toHaveLength(0)
   })
 })
 
@@ -945,6 +997,115 @@ describe('Section 6 — Workout Logging', () => {
     const { rows: sl } = await testPool.query('SELECT id FROM exercise_set_logs WHERE exercise_log_id=$1', [el[0].id])
     expect(sl).toHaveLength(0)
   })
+
+  test('TC-LOG-010 · workout_logs.rating is persisted exactly as submitted', async () => {
+    // workoutId is already COMPLETED from TC-LOG-001; re-logging replaces rating only
+    const res = await request(app)
+      .post(`/api/v1/client/workouts/${workoutId}/log`)
+      .set('Cookie', clientCookies)
+      .send({ rating: 3, exercise_logs: [] })
+    expect(res.status).toBe(201)
+    expect(res.body.data.rating).toBe(3)
+    const { rows } = await testPool.query('SELECT rating FROM workout_logs WHERE workout_id=$1', [workoutId])
+    expect(rows[0].rating).toBe(3)
+  })
+
+  test('TC-LOG-011 · exercise_logs.notes is persisted when submitted with a set', async () => {
+    const assign = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Cookie', coachCookies)
+      .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: YESTERDAY })
+    const freshId = assign.body.data.id
+    const { rows: we } = await testPool.query('SELECT id FROM workout_exercises WHERE workout_id=$1', [freshId])
+
+    const logRes = await request(app)
+      .post(`/api/v1/client/workouts/${freshId}/log`)
+      .set('Cookie', clientCookies)
+      .send({
+        exercise_logs: [{
+          workout_exercise_id: we[0].id,
+          notes: 'Left knee felt tight_TEST',
+          sets: [{ set_index: 0, reps: 8, weight: 60 }],
+        }],
+      })
+    expect(logRes.status).toBe(201)
+    const logId = logRes.body.data.id
+    const { rows } = await testPool.query('SELECT notes FROM exercise_logs WHERE workout_log_id=$1', [logId])
+    expect(rows[0].notes).toBe('Left knee felt tight_TEST')
+  })
+
+  test('TC-LOG-012 · weight=0 is stored as numeric 0, not NULL', async () => {
+    const assign = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Cookie', coachCookies)
+      .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: YESTERDAY })
+    const freshId = assign.body.data.id
+    const { rows: we } = await testPool.query('SELECT id FROM workout_exercises WHERE workout_id=$1', [freshId])
+
+    const logRes = await request(app)
+      .post(`/api/v1/client/workouts/${freshId}/log`)
+      .set('Cookie', clientCookies)
+      .send({
+        exercise_logs: [{
+          workout_exercise_id: we[0].id,
+          sets: [{ set_index: 0, reps: 10, weight: 0 }],
+        }],
+      })
+    expect(logRes.status).toBe(201)
+    const logId = logRes.body.data.id
+    const { rows: el } = await testPool.query('SELECT id FROM exercise_logs WHERE workout_log_id=$1', [logId])
+    const { rows: sl } = await testPool.query(
+      'SELECT weight FROM exercise_set_logs WHERE exercise_log_id=$1 ORDER BY set_index', [el[0].id]
+    )
+    expect(sl[0].weight).not.toBeNull()
+    expect(Number(sl[0].weight)).toBe(0)
+  })
+
+  test('TC-LOG-013 · workout_logs.overall_notes is persisted alongside exercise data', async () => {
+    const assign = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Cookie', coachCookies)
+      .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: YESTERDAY })
+    const freshId = assign.body.data.id
+    const { rows: we } = await testPool.query('SELECT id FROM workout_exercises WHERE workout_id=$1', [freshId])
+
+    const logRes = await request(app)
+      .post(`/api/v1/client/workouts/${freshId}/log`)
+      .set('Cookie', clientCookies)
+      .send({
+        overall_notes: 'Felt strong, PR on squats_TEST',
+        exercise_logs: [{
+          workout_exercise_id: we[0].id,
+          sets: [{ set_index: 0, reps: 5, weight: 100 }],
+        }],
+      })
+    expect(logRes.status).toBe(201)
+    const { rows } = await testPool.query('SELECT overall_notes FROM workout_logs WHERE workout_id=$1', [freshId])
+    expect(rows[0].overall_notes).toBe('Felt strong, PR on squats_TEST')
+  })
+
+  // MANUAL TEST CASES — cannot be covered by Jest/supertest
+  describe.skip('Manual UX tests (known gaps, acceptable for MVP)', () => {
+    test('TC-UX-001 · Mid-session exit data loss', () => {
+      // Steps:
+      //   1. Login as client, open a SCHEDULED workout
+      //   2. Enter weight/reps in 2 of the 3 exercises
+      //   3. Refresh the page (Cmd+R)
+      // Expected: All entered data is lost (no draft persistence implemented)
+      // Current behaviour: SILENT LOSS — no beforeunload warning, no draft saving
+      // Status: Known gap, acceptable for MVP
+    })
+
+    test('TC-UX-002 · Concurrent editing same workout in two tabs', () => {
+      // Steps:
+      //   1. Open the same workout log in two browser tabs
+      //   2. Enter different values in tab 1, submit
+      //   3. Enter different values in tab 2, submit
+      // Expected: Last submission wins silently (no conflict detection)
+      // Current behaviour: LAST WRITE WINS — no optimistic locking, no warning
+      // Status: Known gap, acceptable for MVP (single user per client)
+    })
+  })
 })
 
 // =============================================================================
@@ -1029,6 +1190,23 @@ describe('Section 8 — Coach Reviews Client Workout', () => {
     expect(res.status).toBe(200)
     expect(res.body.data.email).toBe(CLIENT_EMAIL)
     expect(res.body.data.id).toBe(clientProfileId)
+  })
+
+  test('TC-REVIEW-004 · Coach sees set-level data on a completed workout', async () => {
+    // workoutId was logged as COMPLETED in TC-LOG-001 with 3 sets
+    const res = await request(app)
+      .get(`/api/v1/coach/workouts/${workoutId}`)
+      .set('Cookie', coachCookies)
+    expect(res.status).toBe(200)
+    const loggedEx = res.body.data.exercises.find(ex => ex.exercise_log !== null)
+    expect(loggedEx).toBeDefined()
+    expect(Array.isArray(loggedEx.exercise_log.sets)).toBe(true)
+    expect(loggedEx.exercise_log.sets.length).toBeGreaterThan(0)
+    expect(loggedEx.exercise_log.sets[0]).toMatchObject({
+      set_index: expect.any(Number),
+      reps: expect.any(Number),
+      weight: expect.anything(),
+    })
   })
 })
 
@@ -1870,6 +2048,23 @@ describe('Section 23 — Messaging Edge Cases', () => {
       .set('Cookie', coach2Cookies)
     expect(res.status).toBe(403)
     expect(res.body.error.code).toBe('FORBIDDEN')
+  })
+
+  test('TC-MSG-012 · Sending identical message content twice creates two separate rows (no server-side dedup)', async () => {
+    // Intentional behaviour: no deduplication on the server
+    await request(app)
+      .post('/api/v1/messages/send')
+      .set('Cookie', coachCookies)
+      .send({ thread_id: threadId, content: 'Duplicate_TEST' })
+    await request(app)
+      .post('/api/v1/messages/send')
+      .set('Cookie', coachCookies)
+      .send({ thread_id: threadId, content: 'Duplicate_TEST' })
+    const { rows } = await testPool.query(
+      'SELECT COUNT(*) FROM messages WHERE content=$1 AND thread_id=$2',
+      ['Duplicate_TEST', threadId]
+    )
+    expect(Number(rows[0].count)).toBe(2)
   })
 })
 

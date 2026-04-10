@@ -65,7 +65,7 @@ if (IS_PROD && ALLOWED_ORIGINS.length === 0) {
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true)
-    cb(new Error(`CORS: origin ${origin} not allowed`))
+    cb(Object.assign(new Error(`CORS: origin ${origin} not allowed`), { status: 403 }))
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
