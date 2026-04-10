@@ -19,6 +19,17 @@ api.interceptors.response.use(
   }
 )
 
+// Attach CSRF token to every mutating request.
+// The token is seeded into the x-csrf-token cookie by GET /api/v1/csrf-token
+// on app load; we read it here and echo it back as a request header.
+api.interceptors.request.use(config => {
+  if (['post', 'put', 'patch', 'delete'].includes(config.method?.toLowerCase())) {
+    const match = document.cookie.match(/(?:^|;\s*)x-csrf-token=([^;]+)/)
+    if (match) config.headers['x-csrf-token'] = decodeURIComponent(match[1])
+  }
+  return config
+})
+
 export const authApi = {
   register: (body) => api.post('/auth/register', body),
   login:    (body) => api.post('/auth/login', body),

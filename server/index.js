@@ -4,6 +4,7 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import cookieParser from 'cookie-parser'
+import { doubleCsrf } from 'csrf-csrf'
 
 import { logger } from './lib/logger.js'
 import { apiLimiter } from './middleware/rateLimiter.js'
@@ -47,6 +48,22 @@ app.use((req, res, next) => {
 
 // ─── Cookie parsing ───────────────────────────────────────────────────────────
 app.use(cookieParser())
+
+// ─── CSRF protection ──────────────────────────────────────────────────────────
+// Double-submit cookie pattern: server sets a JS-readable x-csrf-token cookie;
+// frontend reads it and echoes it back as an x-csrf-token request header on
+// every mutating request. Skipped in test environment.
+const { generateToken, doubleCsrfProtection } = doubleCsrf({
+  getSecret: () => process.env.JWT_SECRET,
+  cookieName: 'x-csrf-token',
+  cookieOptions: {
+    httpOnly: false, // must be readable by JS so the frontend can echo it
+    sameSite: 'lax',
+    secure: IS_PROD,
+  },
+  size: 64,
+  getTokenFromRequest: (req) => req.headers['x-csrf-token'],
+})
 
 // ─── Security headers ─────────────────────────────────────────────────────────
 app.use(helmet())
@@ -104,6 +121,18 @@ app.use((req, _res, next) => {
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
+
+// ─── CSRF token endpoint ──────────────────────────────────────────────────────
+// Called once on app load. Sets the x-csrf-token cookie and returns the token
+// value so the frontend can store it for immediate use.
+app.get('/api/v1/csrf-token', (req, res) => {
+  res.json({ csrfToken: generateToken(req, res) })
+})
+
+// Apply CSRF protection to all mutating routes (skipped in test env)
+if (process.env.NODE_ENV !== 'test') {
+  app.use(doubleCsrfProtection)
+}
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/v1/auth',      authRoutes)
