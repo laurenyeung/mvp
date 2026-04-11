@@ -113,9 +113,16 @@ app.use((req, _res, next) => {
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
 
-// Apply CSRF protection to all mutating routes (skipped in test env)
+// Apply CSRF protection to authenticated routes only (not /auth/ — login/register
+// are unauthenticated so no token exists yet, and CSRF attacks require an
+// existing session to be useful). Skipped in test environment.
 if (process.env.NODE_ENV !== 'test') {
-  app.use(csrf(csrfSecret, ['POST', 'PUT', 'PATCH', 'DELETE']))
+  const csrfMiddleware = csrf(csrfSecret, ['POST', 'PUT', 'PATCH', 'DELETE'])
+  app.use('/api/v1/exercises', csrfMiddleware)
+  app.use('/api/v1/coach',     csrfMiddleware)
+  app.use('/api/v1/client',    csrfMiddleware)
+  app.use('/api/v1/messages',  csrfMiddleware)
+  app.use('/api/v1/media',     csrfMiddleware)
 }
 
 // ─── CSRF token endpoint ──────────────────────────────────────────────────────
@@ -141,7 +148,7 @@ app.use((_req, res) => {
 
 // ─── Global error handler ─────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
-  if (err.message === 'Did not get a valid CSRF token') {
+  if (err.message?.startsWith('Did not get a valid CSRF token')) {
     return res.status(403).json({ error: { code: 'CSRF_INVALID', message: 'Invalid or missing CSRF token' } })
   }
 
