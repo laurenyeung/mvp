@@ -1,6 +1,11 @@
 import axios from 'axios'
 import { useAuthStore } from '@/features/auth/store/authStore'
 
+// In-memory CSRF token — populated on app load and refreshed every 4 min.
+// tiny-csrf reads it from req.body._csrf, so we inject it into every mutating request.
+let _csrfToken = null
+export function setCsrfToken(token) { _csrfToken = token }
+
 export const api = axios.create({
   baseURL:         import.meta.env.VITE_API_URL ?? '/api/v1',
   headers:         { 'Content-Type': 'application/json' },
@@ -18,6 +23,18 @@ api.interceptors.response.use(
     return Promise.reject(err)
   }
 )
+
+// Inject CSRF token into every mutating request body.
+// tiny-csrf reads req.body._csrf — we merge it in here so callers don't need to.
+api.interceptors.request.use(config => {
+  if (_csrfToken && ['post', 'put', 'patch', 'delete'].includes(config.method?.toLowerCase())) {
+    const isJson = !config.headers['Content-Type'] || config.headers['Content-Type'].includes('application/json')
+    if (isJson) {
+      config.data = { _csrf: _csrfToken, ...(config.data ?? {}) }
+    }
+  }
+  return config
+})
 
 export const authApi = {
   register: (body) => api.post('/auth/register', body),
@@ -55,6 +72,8 @@ export const coachApi = {
   getWorkout:     (id)        => api.get(`/coach/workouts/${id}`),
   updateWorkout:  (id, body)  => api.patch(`/coach/workouts/${id}`, body),
   deleteWorkout:  (id)        => api.delete(`/coach/workouts/${id}`),
+  respondRescheduleRequest: (workoutId, reqId, body) =>
+    api.post(`/coach/workouts/${workoutId}/reschedule-requests/${reqId}/respond`, body),
 
   // Workout exercise prescriptions
   updateWorkoutExercise: (id, body) => api.patch(`/coach/workout-exercises/${id}`, body),
@@ -75,7 +94,8 @@ export const clientApi = {
   pastWorkouts:    ()       => api.get('/client/workouts/past',     { params: { date: localDateStr() } }),
   listWorkouts:    (params) => api.get('/client/workouts', { params }),
   getWorkout:      (id)     => api.get(`/client/workouts/${id}`),
-  logWorkout:      (workoutId, body) => api.post(`/client/workouts/${workoutId}/log`, body),
+  logWorkout:           (workoutId, body) => api.post(`/client/workouts/${workoutId}/log`, body),
+  requestReschedule:    (workoutId, body) => api.post(`/client/workouts/${workoutId}/request-reschedule`, body),
 
   // Media
   uploadExerciseMedia: (exerciseLogId, body) =>

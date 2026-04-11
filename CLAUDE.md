@@ -118,122 +118,31 @@ If verification is blocked (e.g. need a running server), say so explicitly and d
 
 ## 7. Feature Changes — Test-First Discipline
 
-**Every feature change, bug fix, new endpoint, or UI change follows this loop without exception. No shortcuts.**
+Read → test → implement → verify. No exceptions.
 
-### The mandatory loop
+- Read existing tests before touching any code
+- Write/update tests before implementing — see the new test fail first (proves it's real)
+- Run `npm test` — all tests must be green before calling done
+- Frontend-only changes still require `npm test` to catch backend regressions
+- Cross-layer rule: if a field is removed/renamed anywhere in the stack, every layer (DB, route, frontend, tests) must be updated in the same task
 
-```
-Read tests → Update tests → Run tests (expect failure) → Implement → Run tests (must pass) → Done
-```
+> ⚠️ Writing tests and not running them is the same as not writing tests. If tools are unavailable, say so explicitly — never silently skip.
 
-1. **Read existing tests first** — before touching any code, open `integration.test.js` and read every test section relevant to what's changing. Understand what is currently asserted and why.
-
-2. **Update tests to match the new behaviour** — for every change made to backend OR frontend:
-   - If a field is removed from an API response → remove or update assertions about that field
-   - If a field is made optional → add a test proving omitting it succeeds and stores null
-   - If a UI component no longer sends a field → ensure no test expects that field in the request body
-   - If an endpoint changes its shape → update every test that hits that endpoint
-   - Add new test cases for any new code paths or edge cases
-
-3. **Run `npm test`** — confirm the new/modified tests fail for the expected reason before implementing. **Seeing a test fail correctly proves the test is real.**
-
-4. **Implement the change** — write the cleanest implementation that makes the failing tests pass.
-
-5. **Run `npm test` again** — **ALL 160+ tests must be green. Zero regressions. No exceptions.**
-
-6. **If any test fails** — fix the code (not the test) until it passes. Only change a test assertion if the spec itself changed (e.g. a deliberate feature decision).
-
-7. **Do not respond with "done" until step 5 has been executed and confirmed green.**
-
-> ⚠️ **Hard rule:** Writing tests and not running them is the same as not writing tests. `npm test` must be run and the output must show PASS. If the tools are unavailable and tests cannot be run, say so explicitly — do not silently skip this step.
-
-### The frontend ↔ backend sync rule
-
-**Whenever a field is removed, renamed, or made optional anywhere in the stack, every layer must be updated in the same task:**
-
-| Layer touched | What must also be updated |
-|---|---|
-| DB schema (column removed) | Migration + validate.js + route handler + **tests** |
-| API response (field removed) | Route handler + **frontend components** that display it + **tests** |
-| Frontend form (field removed) | validationSchemas.js + the component + **tests** that assert it was required |
-| Backend validation (field made optional) | DB schema + route fallback logic + **tests** for the null case |
-
-This project has already been caught by this more than once. The pattern to avoid: removing `primary_muscle_group` from the backend but leaving it in the frontend form, validation schema, and filter UI — then not updating the tests. **Changes are not done until all layers and all tests are in sync.**
-
-### Test quality standards
-
-Tests must be **specific and meaningful** — not just "status 200". Every test must:
-- Assert the exact HTTP status code
-- Assert at least one field of the response body
-- Assert the resulting DB state where relevant (query the DB directly, don't trust the response alone)
-- Cover the boundary/negative case alongside the happy path
-- Use descriptive names: `TC-FEATURE-NNN · What it proves`
-
-Tests must be **isolated** — test data uses `%_test@example.com` email pattern so `cleanDatabase()` catches everything. Never hardcode UUIDs. Never depend on data from outside the test run.
-
-Tests must be **ordered correctly** — shared state (tokens, IDs) flows top-to-bottom. Document cross-section dependencies with a comment.
-
-### When a feature changes
-- Read the existing tests for that feature first — understand what's currently being asserted
-- Update assertions to match the new expected behaviour
-- Add new test cases for new code paths (e.g. optional field → test omitting it stores null)
-- Remove or update test cases that no longer apply — dead tests are worse than no tests
-- **Run the full suite, not just the affected section** — a change in one route often breaks assumptions elsewhere
-
-### Frontend changes
-Frontend changes don't have automated tests in this repo, but they still trigger the test loop:
-
-1. Identify the exact user-visible failure (blank UI, wrong data, 4xx in network tab)
-2. Check whether the frontend change affects what the backend receives — if a field is removed from a form, check whether any backend test asserts it was required
-3. **Before writing the fix:** read any components or pages the fix links to or depends on
-4. Fix it
-5. **Run `npm test`** — confirm no backend regressions. Even a pure UI change can invalidate a backend test expectation.
-6. State what a manual verification looks like: e.g. "open `/exercises`, click New Exercise — confirm no Muscle Group field appears in the form"
+> Full runbook, quality standards, and cross-layer sync table: `/test`
 
 ---
 
-## 8. Security and Authentication
+## 8. Security
 
-Every piece of code written for this repo must pass this checklist before being considered done.
+Every change must pass this baseline before merging:
 
-### Secrets and credentials
-- **No secrets in code** — all credentials, tokens, and API keys live in `.env` only
-- `.env` is always in `.gitignore` — use `**/.env` to catch nested files
-- `.env.example` contains only placeholder values, no real secrets
-- Before any `git commit`, mentally scan for: passwords, tokens, connection strings with credentials, private keys
+- No secrets in code — `.env` only, never committed
+- All user input validated with Zod before touching DB or business logic
+- Parameterised queries only — never interpolate user input into SQL
+- `helmet()` stays on, body cap stays at `64kb`
+- Run `npm audit` after every `npm install` — fix moderate+ before merging
 
-### Input handling
-- **All user input is validated with Zod** before touching the database or business logic
-- Parameterised queries only — never string-interpolate user input into SQL
-- Whitelist enum values (status, role, metric_type) rather than passing raw query params to DB
-- Validate UUID format on all `:id` route params before querying
-- Clamp all pagination `limit` params (max 100) — never allow unbounded queries
-- When documenting a minimum input length (e.g. search requires ≥ 2 chars), enforce it with `if (value.length < MIN)`, not `if (!value)` — they are not equivalent
-
-### Rate limiting
-- Auth endpoints (`/auth/login`, `/auth/register`): `authLimiter` — 10 req / 15 min per IP
-- Media/presign endpoints: `mediaLimiter` — 30 req / min per IP
-- All other API routes: `apiLimiter` — 200 req / min per IP
-- Any new route group must be assessed for which limiter applies
-
-### Passwords and tokens
-- Passwords hashed with `bcrypt` at cost factor 12 minimum
-- Always run `bcrypt.compare` even when the user is not found — prevents timing attacks
-- JWT secret must be ≥ 32 characters, validated at server startup
-- Never log passwords, tokens, or full request bodies containing sensitive fields
-
-### Dependencies
-- Run `npm audit` after every `npm install`
-- Fix moderate+ severity vulnerabilities before merging
-- Use `overrides` in `package.json` to force safe versions of transitive dependencies
-- Verify new packages exist on npm before adding them: `npm info <package-name>`
-
-### General
-- `helmet()` must remain on the Express app — do not remove it
-- Request body size is capped at `64kb` — do not raise this without justification
-- Never expose stack traces to clients in production
-- S3 keys must be scoped per user ID to prevent users overwriting each other's files
-- Path traversal checks on any user-supplied file path or S3 key
+> Full audit checklist for a route, PR, or file: `/security`
 
 ---
 

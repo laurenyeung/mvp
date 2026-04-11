@@ -157,6 +157,14 @@ export default function CoachWorkoutDetailPage() {
     },
   })
 
+  const { mutate: respondReschedule, isPending: isResponding } = useMutation({
+    mutationFn: (action) => coachApi.respondRescheduleRequest(id, workout.pending_reschedule.id, { action }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['coach-workout', id] })
+      qc.invalidateQueries({ queryKey: ['client-workouts', workout?.client_id] })
+    },
+  })
+
   if (isLoading) return <div className="p-6 text-center text-gray-400">Loading…</div>
   if (!workout)  return <div className="p-6 text-center text-gray-400">Workout not found</div>
 
@@ -216,16 +224,45 @@ export default function CoachWorkoutDetailPage() {
               {canEdit && (
                 <button
                   onClick={startEditDate}
-                  className="text-gray-300 hover:text-pixel-accent transition-colors"
+                  className="text-gray-500 hover:text-pixel-accent transition-colors"
                   aria-label="Edit date"
                 >
-                  <Pencil size={12} />
+                  <Pencil size={16} />
                 </button>
               )}
             </span>
           )}
         </div>
       </div>
+
+      {/* Reschedule request nudge */}
+      {workout.pending_reschedule && (
+        <div className="card p-4 mb-6 bg-amber-50 border border-amber-100">
+          <p className="text-sm font-semibold text-amber-800 mb-0.5">Reschedule requested</p>
+          <p className="text-sm text-amber-700 mb-3">
+            Client wants to move this to{' '}
+            <span className="font-semibold">
+              {new Date(workout.pending_reschedule.requested_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </span>
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => respondReschedule('accept')}
+              disabled={isResponding}
+              className="btn-primary py-1.5 px-4 text-sm"
+            >
+              Accept
+            </button>
+            <button
+              onClick={() => respondReschedule('decline')}
+              disabled={isResponding}
+              className="btn-ghost py-1.5 px-4 text-sm"
+            >
+              Decline
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Exercise sections */}
       <div className="space-y-6">

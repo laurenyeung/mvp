@@ -313,6 +313,17 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id, created_at);
 
+-- RESCHEDULE REQUESTS
+CREATE TABLE IF NOT EXISTS reschedule_requests (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workout_id     UUID NOT NULL REFERENCES workouts(id) ON DELETE CASCADE,
+  requested_by   UUID NOT NULL REFERENCES users(id),
+  requested_date DATE NOT NULL,
+  status         TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','ACCEPTED','DECLINED')),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_reschedule_requests_workout ON reschedule_requests(workout_id, created_at);
+
 -- NOTIFICATIONS
 CREATE TABLE IF NOT EXISTS notifications (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

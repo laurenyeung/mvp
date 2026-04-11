@@ -3352,3 +3352,128 @@ describe('Section 33 — Warmup / Cooldown Sections', () => {
     expect(res.status).toBe(400)
   })
 })
+
+// =============================================================================
+// Section 34 — Reschedule Requests
+// Depends on: coachCookies, clientCookies, coach2Cookies, clientProfileId, exerciseId, templateId
+// =============================================================================
+describe('Section 34 — Reschedule Requests', () => {
+  let rrWorkoutId
+  let rrReqId
+
+  test('TC-RREQ-001 · Client creates reschedule request — 200, DB row PENDING', async () => {
+    const assign = await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Cookie', coachCookies)
+      .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: TOMORROW })
+    expect(assign.status).toBe(201)
+    rrWorkoutId = assign.body.data.id
+
+    const res = await request(app)
+      .post(`/api/v1/client/workouts/${rrWorkoutId}/request-reschedule`)
+      .set('Cookie', clientCookies)
+      .send({ requested_date: TOMORROW })
+    expect(res.status).toBe(200)
+    expect(res.body.data.message).toBeTruthy()
+
+    const { rows } = await testPool.query(
+      `SELECT id, status FROM reschedule_requests WHERE workout_id=$1`, [rrWorkoutId]
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].status).toBe('PENDING')
+    rrReqId = rows[0].id
+  })
+
+  test('TC-RREQ-002 · Client cannot create second request while one is PENDING — 409', async () => {
+    const res = await request(app)
+      .post(`/api/v1/client/workouts/${rrWorkoutId}/request-reschedule`)
+      .set('Cookie', clientCookies)
+      .send({ requested_date: TOMORROW })
+    expect(res.status).toBe(409)
+    expect(res.body.error.code).toBe('ALREADY_PENDING')
+  })
+
+  test('TC-RREQ-003 · GET /client/workouts/:id includes pending_reschedule', async () => {
+    const res = await request(app)
+      .get(`/api/v1/client/workouts/${rrWorkoutId}`)
+      .set('Cookie', clientCookies)
+    expect(res.status).toBe(200)
+    expect(res.body.data.pending_reschedule).not.toBeNull()
+    expect(res.body.data.pending_reschedule.requested_date).toBeTruthy()
+  })
+
+  test('TC-RREQ-004 · GET /coach/workouts/:id includes pending_reschedule with id and requested_date', async () => {
+    const res = await request(app)
+      .get(`/api/v1/coach/workouts/${rrWorkoutId}`)
+      .set('Cookie', coachCookies)
+    expect(res.status).toBe(200)
+    expect(res.body.data.pending_reschedule).not.toBeNull()
+    expect(res.body.data.pending_reschedule.id).toBeTruthy()
+    expect(res.body.data.pending_reschedule.requested_date).toBeTruthy()
+  })
+
+  test('TC-RREQ-005 · Coach accepts — scheduled_date updated, request ACCEPTED, pending_reschedule null', async () => {
+    const NEXT_WEEK = (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString().split('T')[0] })()
+    await testPool.query(`UPDATE reschedule_requests SET requested_date=$1 WHERE id=$2`, [NEXT_WEEK, rrReqId])
+
+    const res = await request(app)
+      .post(`/api/v1/coach/workouts/${rrWorkoutId}/reschedule-requests/${rrReqId}/respond`)
+      .set('Cookie', coachCookies)
+      .send({ action: 'accept' })
+    expect(res.status).toBe(200)
+
+    const { rows: wRows } = await testPool.query(`SELECT scheduled_date::text FROM workouts WHERE id=$1`, [rrWorkoutId])
+    expect(wRows[0].scheduled_date.startsWith(NEXT_WEEK)).toBe(true)
+
+    const { rows: rrRows } = await testPool.query(`SELECT status FROM reschedule_requests WHERE id=$1`, [rrReqId])
+    expect(rrRows[0].status).toBe('ACCEPTED')
+
+    const check = await request(app)
+      .get(`/api/v1/coach/workouts/${rrWorkoutId}`)
+      .set('Cookie', coachCookies)
+    expect(check.body.data.pending_reschedule).toBeNull()
+  })
+
+  test('TC-RREQ-006 · Coach declines — request DECLINED, scheduled_date unchanged', async () => {
+    await testPool.query(
+      `INSERT INTO reschedule_requests (workout_id, requested_by, requested_date)
+       SELECT $1, u.id, $2 FROM users u JOIN client_profiles cp ON cp.user_id=u.id WHERE cp.id=$3`,
+      [rrWorkoutId, TOMORROW, clientProfileId]
+    )
+    const { rows: newRR } = await testPool.query(
+      `SELECT id FROM reschedule_requests WHERE workout_id=$1 AND status='PENDING'`, [rrWorkoutId]
+    )
+    const declineReqId = newRR[0].id
+    const { rows: before } = await testPool.query(`SELECT scheduled_date FROM workouts WHERE id=$1`, [rrWorkoutId])
+
+    const res = await request(app)
+      .post(`/api/v1/coach/workouts/${rrWorkoutId}/reschedule-requests/${declineReqId}/respond`)
+      .set('Cookie', coachCookies)
+      .send({ action: 'decline' })
+    expect(res.status).toBe(200)
+
+    const { rows: rrRows } = await testPool.query(`SELECT status FROM reschedule_requests WHERE id=$1`, [declineReqId])
+    expect(rrRows[0].status).toBe('DECLINED')
+
+    const { rows: after } = await testPool.query(`SELECT scheduled_date FROM workouts WHERE id=$1`, [rrWorkoutId])
+    expect(after[0].scheduled_date).toEqual(before[0].scheduled_date)
+  })
+
+  test('TC-RREQ-007 · Wrong coach cannot respond to reschedule request — 404', async () => {
+    await testPool.query(
+      `INSERT INTO reschedule_requests (workout_id, requested_by, requested_date)
+       SELECT $1, u.id, $2 FROM users u JOIN client_profiles cp ON cp.user_id=u.id WHERE cp.id=$3`,
+      [rrWorkoutId, TOMORROW, clientProfileId]
+    )
+    const { rows } = await testPool.query(
+      `SELECT id FROM reschedule_requests WHERE workout_id=$1 AND status='PENDING'`, [rrWorkoutId]
+    )
+    const reqId = rows[0].id
+
+    const res = await request(app)
+      .post(`/api/v1/coach/workouts/${rrWorkoutId}/reschedule-requests/${reqId}/respond`)
+      .set('Cookie', coach2Cookies)
+      .send({ action: 'accept' })
+    expect(res.status).toBe(404)
+  })
+})
