@@ -114,6 +114,11 @@ Updated after every user correction. Review at the start of each session for pat
 
 ## Security
 
+### 2026-04-10 — Chose CSRF library not recognized by CodeQL `security` `deps`
+**What happened:** Implemented CSRF protection with `csrf-csrf`. CodeQL kept firing `CWE-352/MissingCsrfMiddleware` even after the middleware was wired up. Root cause: CodeQL's query has a hardcoded recognized library list (`csurf`, `tiny-csrf`, `lusca`, `fastify-csrf`). `csrf-csrf` is not on it.
+**Root cause:** Picked the most popular-sounding package without checking whether static analysis tools (CodeQL, Snyk, etc.) explicitly recognize it.
+**Rule:** Before choosing a security library (CSRF, auth, encryption), check whether the static analysis tool in use (CodeQL, Snyk, etc.) explicitly recognizes it. Search the tool's source for the library name. If not recognized, use one that is — regardless of npm popularity. For CodeQL CSRF: use `csurf`, `tiny-csrf`, `lusca`, or `fastify-csrf`.
+
 ### 2026-03-29 — Skipped fixing moderate severity npm vulnerability `security` `deps`
 **What happened:** During a security audit, a moderate severity `brace-expansion` vulnerability was going to be deferred.
 **Root cause:** Mentally categorised "moderate" as acceptable to defer.

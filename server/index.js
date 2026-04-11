@@ -4,7 +4,7 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import cookieParser from 'cookie-parser'
-import { doubleCsrf } from 'csrf-csrf'
+import csrf from 'tiny-csrf'
 
 import { logger } from './lib/logger.js'
 import { apiLimiter } from './middleware/rateLimiter.js'
@@ -47,23 +47,14 @@ app.use((req, res, next) => {
 })
 
 // ─── Cookie parsing ───────────────────────────────────────────────────────────
-app.use(cookieParser())
+// Secret required by tiny-csrf so the _csrf cookie is signed.
+app.use(cookieParser(process.env.JWT_SECRET))
 
 // ─── CSRF protection ──────────────────────────────────────────────────────────
-// Double-submit cookie pattern: server sets a JS-readable x-csrf-token cookie;
-// frontend reads it and echoes it back as an x-csrf-token request header on
-// every mutating request. Skipped in test environment.
-const { generateToken, doubleCsrfProtection } = doubleCsrf({
-  getSecret: () => process.env.JWT_SECRET,
-  cookieName: 'x-csrf-token',
-  cookieOptions: {
-    httpOnly: false, // must be readable by JS so the frontend can echo it
-    sameSite: 'lax',
-    secure: IS_PROD,
-  },
-  size: 64,
-  getTokenFromRequest: (req) => req.headers['x-csrf-token'],
-})
+// tiny-csrf: token is served via GET /api/v1/csrf-token, stored in memory by
+// the frontend, and echoed back as req.body._csrf on every mutating request.
+// Skipped in test environment.
+const csrfSecret = process.env.JWT_SECRET.slice(0, 32) // tiny-csrf requires exactly 32 chars
 
 // ─── Security headers ─────────────────────────────────────────────────────────
 app.use(helmet())
@@ -122,17 +113,18 @@ app.use((req, _res, next) => {
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
 
-// ─── CSRF token endpoint ──────────────────────────────────────────────────────
-// Called once on app load. Sets the x-csrf-token cookie and returns the token
-// value so the frontend can store it for immediate use.
-app.get('/api/v1/csrf-token', (req, res) => {
-  res.json({ csrfToken: generateToken(req, res) })
-})
-
 // Apply CSRF protection to all mutating routes (skipped in test env)
 if (process.env.NODE_ENV !== 'test') {
-  app.use(doubleCsrfProtection)
+  app.use(csrf(csrfSecret, ['POST', 'PUT', 'PATCH', 'DELETE']))
 }
+
+// ─── CSRF token endpoint ──────────────────────────────────────────────────────
+// Called once on app load (and refreshed every 4 min). tiny-csrf sets the token
+// on GET requests via req.csrfToken() — the frontend stores it in memory and
+// injects it as _csrf in every mutating request body.
+app.get('/api/v1/csrf-token', (req, res) => {
+  res.json({ csrfToken: req.csrfToken() })
+})
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/v1/auth',      authRoutes)
@@ -149,6 +141,10 @@ app.use((_req, res) => {
 
 // ─── Global error handler ─────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
+  if (err.message === 'Did not get a valid CSRF token') {
+    return res.status(403).json({ error: { code: 'CSRF_INVALID', message: 'Invalid or missing CSRF token' } })
+  }
+
   const status  = err.status  || 500
   const code    = err.code    || 'INTERNAL_ERROR'
 

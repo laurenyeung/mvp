@@ -1,6 +1,11 @@
 import axios from 'axios'
 import { useAuthStore } from '@/features/auth/store/authStore'
 
+// In-memory CSRF token — populated on app load and refreshed every 4 min.
+// tiny-csrf reads it from req.body._csrf, so we inject it into every mutating request.
+let _csrfToken = null
+export function setCsrfToken(token) { _csrfToken = token }
+
 export const api = axios.create({
   baseURL:         import.meta.env.VITE_API_URL ?? '/api/v1',
   headers:         { 'Content-Type': 'application/json' },
@@ -19,13 +24,14 @@ api.interceptors.response.use(
   }
 )
 
-// Attach CSRF token to every mutating request.
-// The token is seeded into the x-csrf-token cookie by GET /api/v1/csrf-token
-// on app load; we read it here and echo it back as a request header.
+// Inject CSRF token into every mutating request body.
+// tiny-csrf reads req.body._csrf — we merge it in here so callers don't need to.
 api.interceptors.request.use(config => {
-  if (['post', 'put', 'patch', 'delete'].includes(config.method?.toLowerCase())) {
-    const match = document.cookie.match(/(?:^|;\s*)x-csrf-token=([^;]+)/)
-    if (match) config.headers['x-csrf-token'] = decodeURIComponent(match[1])
+  if (_csrfToken && ['post', 'put', 'patch', 'delete'].includes(config.method?.toLowerCase())) {
+    const isJson = !config.headers['Content-Type'] || config.headers['Content-Type'].includes('application/json')
+    if (isJson) {
+      config.data = { _csrf: _csrfToken, ...(config.data ?? {}) }
+    }
   }
   return config
 })
