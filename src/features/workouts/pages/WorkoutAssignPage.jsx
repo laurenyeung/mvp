@@ -206,9 +206,9 @@ export default function WorkoutAssignPage() {
             </select>
           </div>
 
-          <div className="min-w-0 overflow-hidden">
+          <div>
             <label className="label">Date *</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input max-w-full" />
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input" />
           </div>
 
           <div>

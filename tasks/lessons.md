@@ -133,6 +133,11 @@ Updated after every user correction. Review at the start of each session for pat
 **Root cause:** Treated "task complete" as equivalent to "commit and push".
 **Rule:** Never run `git commit` or `git push` unless the user explicitly says so. Stop at the code change and wait.
 
+### 2026-04-11 — Hotfix branch created from feature branch, not main `git`
+**What happened:** `fix/csrf-tiny-csrf` was created with `git checkout -b` while on `fix/incomplete-status-remove-missed`. It inherited all unmerged feature commits. When the hotfix PR merged, it pulled in two unrelated PRs (#24, #25) as well.
+**Root cause:** `git checkout -b <branch>` creates from the current branch, not from main. The subsequent `git merge main` was a no-op since main didn't have those commits yet.
+**Rule:** Always branch fixes from main explicitly: `git checkout main && git pull && git checkout -b fix/<name>`. Never branch from whatever happens to be checked out.
+
 ### 2026-04-07 — Push rejected because remote had new commits `git`
 **What happened:** `git push` failed with "fetch first" because the remote branch had commits not present locally.
 **Root cause:** Pushed without pulling first.
