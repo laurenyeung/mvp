@@ -113,15 +113,23 @@ app.use((req, _res, next) => {
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
 
-// Apply CSRF protection to all mutating routes (skipped in test env)
+// Apply CSRF middleware globally so req.csrfToken() is always available (tiny-csrf
+// needs to run on GET /csrf-token to generate the secret cookie). Auth routes are
+// excluded from enforcement — login/register are unauthenticated so no token
+// exists yet, and CSRF attacks require an existing session to be useful.
+// Skipped in test environment.
 if (process.env.NODE_ENV !== 'test') {
-  app.use(csrf(csrfSecret, ['POST', 'PUT', 'PATCH', 'DELETE']))
+  const csrfMiddleware = csrf(csrfSecret, ['POST', 'PUT', 'PATCH', 'DELETE'])
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.path.startsWith('/api/v1/auth/')) return next()
+    csrfMiddleware(req, res, next)
+  })
 }
 
 // ─── CSRF token endpoint ──────────────────────────────────────────────────────
-// Called once on app load (and refreshed every 4 min). tiny-csrf sets the token
-// on GET requests via req.csrfToken() — the frontend stores it in memory and
-// injects it as _csrf in every mutating request body.
+// Called once on app load (and refreshed every 4 min). tiny-csrf sets the secret
+// cookie on this GET request; subsequent POSTs to protected routes validate
+// req.body._csrf against that cookie.
 app.get('/api/v1/csrf-token', (req, res) => {
   res.json({ csrfToken: req.csrfToken() })
 })
@@ -141,7 +149,7 @@ app.use((_req, res) => {
 
 // ─── Global error handler ─────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
-  if (err.message === 'Did not get a valid CSRF token') {
+  if (err.message?.startsWith('Did not get a valid CSRF token')) {
     return res.status(403).json({ error: { code: 'CSRF_INVALID', message: 'Invalid or missing CSRF token' } })
   }
 
