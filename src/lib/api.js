@@ -12,8 +12,17 @@ export const api = axios.create({
   withCredentials: true, // send the httpOnly JWT cookie on every request
 })
 
+const MUTATING = ['post', 'put', 'patch', 'delete']
+
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // tiny-csrf clears the cookie after every successful mutating request (one-time token).
+    // Re-fetch immediately so the next request has a valid token ready.
+    if (MUTATING.includes(res.config?.method?.toLowerCase())) {
+      api.get('/csrf-token').then(r => setCsrfToken(r.data.csrfToken)).catch(() => {})
+    }
+    return res
+  },
   (err) => {
     const isAuthEndpoint = err.config?.url?.includes('/auth/')
     if (err.response?.status === 401 && !isAuthEndpoint) {
@@ -27,9 +36,10 @@ api.interceptors.response.use(
 // Inject CSRF token into every mutating request body.
 // tiny-csrf reads req.body._csrf — we merge it in here so callers don't need to.
 api.interceptors.request.use(config => {
-  if (_csrfToken && ['post', 'put', 'patch', 'delete'].includes(config.method?.toLowerCase())) {
-    const isJson = !config.headers['Content-Type'] || config.headers['Content-Type'].includes('application/json')
-    if (isJson) {
+  if (_csrfToken && MUTATING.includes(config.method?.toLowerCase())) {
+    if (config.data instanceof FormData) {
+      config.data.append('_csrf', _csrfToken)
+    } else {
       config.data = { _csrf: _csrfToken, ...(config.data ?? {}) }
     }
   }
