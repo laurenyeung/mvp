@@ -12,7 +12,6 @@ function getYouTubeId(url) {
 }
 
 function ExerciseCard({ ex, user, onEdit }) {
-  const [open, setOpen] = useState(false)
   const [demoOpen, setDemoOpen] = useState(false)
   const ytId = getYouTubeId(ex.youtube_url)
   const qc = useQueryClient()
@@ -25,33 +24,33 @@ function ExerciseCard({ ex, user, onEdit }) {
 
   return (
     <div className="card overflow-hidden">
-      <button
-        onClick={() => { setOpen(o => !o); setDemoOpen(false) }}
-        className="w-full flex items-start gap-3 p-4 text-left"
-      >
+      <div className="flex items-start gap-3 p-4">
         <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center shrink-0 mt-0.5">
           <Dumbbell size={18} className="text-brand-600" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900 text-sm">{ex.name}</p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-semibold text-gray-900 text-sm">{ex.name}</p>
+            <div className="flex items-center gap-2 shrink-0">
+              {ex.is_public && (
+                <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">
+                  Public
+                </span>
+              )}
+              {isOwner && (
+                <button onClick={() => onEdit(ex)} className="btn-ghost p-1">
+                  <Pencil size={13} />
+                </button>
+              )}
+            </div>
+          </div>
           {ex.description && (
-            <p className={`text-xs text-gray-400 mt-1 ${open ? '' : 'line-clamp-2'}`}>{ex.description}</p>
-          )}
-          {ytId && !open && (
-            <p className="text-xs text-pixel-dim mt-1 font-medium">▶ Example Video</p>
+            <p className="text-xs text-gray-400 mt-1 line-clamp-2">{ex.description}</p>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {ex.is_public && (
-            <span className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">
-              Public
-            </span>
-          )}
-          {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-        </div>
-      </button>
+      </div>
 
-      {open && ytId && (
+      {ytId && (
         <div className="px-4 pb-3">
           <button
             onClick={() => setDemoOpen(o => !o)}
@@ -75,8 +74,8 @@ function ExerciseCard({ ex, user, onEdit }) {
         </div>
       )}
 
-      {open && isOwner && (
-        <div className="px-4 pb-4 border-t border-gray-100 pt-3 flex items-center justify-between gap-4">
+      {isOwner && (
+        <div className="px-4 pb-3 border-t border-gray-100 pt-3">
           <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
             <input
               type="checkbox"
@@ -87,12 +86,6 @@ function ExerciseCard({ ex, user, onEdit }) {
             />
             Visible to all coaches (public)
           </label>
-          <button
-            onClick={() => onEdit(ex)}
-            className="btn-ghost gap-1.5 text-sm py-1.5 shrink-0"
-          >
-            <Pencil size={13} /> Edit
-          </button>
         </div>
       )}
     </div>
