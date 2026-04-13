@@ -208,7 +208,7 @@ export default function WorkoutAssignPage() {
 
           <div>
             <label className="label">Date *</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input" />
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input max-w-full" style={{ minWidth: 0 }} />
           </div>
 
           <div>
