@@ -36,10 +36,9 @@ function getYouTubeId(url) {
   return m ? m[1] : null
 }
 
-function WarmCoolCard({ ex }) {
+function WarmCoolCard({ ex, done, onToggle }) {
   const [open, setOpen] = useState(true)
   const [demoOpen, setDemoOpen] = useState(false)
-  const [done, setDone] = useState(false)
   const ytId = getYouTubeId(ex.youtube_url)
 
   return (
@@ -48,7 +47,7 @@ function WarmCoolCard({ ex }) {
         <input
           type="checkbox"
           checked={done}
-          onChange={e => setDone(e.target.checked)}
+          onChange={e => onToggle(e.target.checked)}
           className="w-4 h-4 rounded accent-green-500 shrink-0 cursor-pointer"
         />
         <button
@@ -203,7 +202,10 @@ export default function WorkoutLogPage() {
   const initLogs = useCallback((exercises) => {
     const state = {}
     exercises?.forEach(ex => {
-      if (ex.section === 'WARMUP' || ex.section === 'COOLDOWN') return
+      if (ex.section === 'WARMUP' || ex.section === 'COOLDOWN') {
+        state[ex.id] = { completed: !!ex.exercise_log }
+        return
+      }
       const log = ex.exercise_log
       const slotCount = (ex.prescribed_sets ?? 0) * (ex.log_bilateral ? 2 : 1)
       state[ex.id] = {
@@ -231,7 +233,11 @@ export default function WorkoutLogPage() {
 
   const { mutate: submitLog, isPending } = useMutation({
     mutationFn: () => {
-      // Build exercise_logs — only MAIN exercises are logged (warmup/cooldown are informational)
+      // Build exercise_logs — MAIN exercises log sets/reps; warmup/cooldown log completion only
+      const warmCoolLogs = (workout.exercises || [])
+        .filter(ex => (ex.section === 'WARMUP' || ex.section === 'COOLDOWN') && logState[ex.id]?.completed)
+        .map(ex => ({ workout_exercise_id: ex.id, sets: [] }))
+
       const exercise_logs = (workout.exercises || []).filter(ex => !ex.section || ex.section === 'MAIN').map(ex => {
         const { sets = [], notes = '' } = logState[ex.id] || {}
         const filledSets = sets.filter(s => s.reps || s.weight)
@@ -248,7 +254,7 @@ export default function WorkoutLogPage() {
           })),
         }
       })
-      return clientApi.logWorkout(id, { exercise_logs })
+      return clientApi.logWorkout(id, { exercise_logs: [...warmCoolLogs, ...exercise_logs] })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workout', id] })
@@ -276,6 +282,10 @@ export default function WorkoutLogPage() {
       ...prev,
       [exId]: { ...prev[exId], sets: prev[exId].sets.map((s, i) => i === setIndex ? { ...s, [key]: val } : s) },
     }))
+  }
+
+  const toggleWarmCool = (exId, val) => {
+    setLogState(prev => ({ ...prev, [exId]: { completed: val } }))
   }
 
   const updateNotes = (exId, val) => {
@@ -386,7 +396,7 @@ export default function WorkoutLogPage() {
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Warm Up</p>
                 <div className="space-y-2">
-                  {warmup.map(ex => <WarmCoolCard key={ex.id} ex={ex} />)}
+                  {warmup.map(ex => <WarmCoolCard key={ex.id} ex={ex} done={logState[ex.id]?.completed ?? false} onToggle={val => toggleWarmCool(ex.id, val)} />)}
                 </div>
               </div>
             )}
@@ -414,7 +424,7 @@ export default function WorkoutLogPage() {
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Cool Down</p>
                 <div className="space-y-2">
-                  {cooldown.map(ex => <WarmCoolCard key={ex.id} ex={ex} />)}
+                  {cooldown.map(ex => <WarmCoolCard key={ex.id} ex={ex} done={logState[ex.id]?.completed ?? false} onToggle={val => toggleWarmCool(ex.id, val)} />)}
                 </div>
               </div>
             )}
