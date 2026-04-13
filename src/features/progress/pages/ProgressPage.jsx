@@ -73,7 +73,7 @@ function AddMetricModal({ onClose }) {
           </div>
           <div>
             <label className="label">Date</label>
-            <input {...register('recorded_at')} type="date" className="input" />
+            <input {...register('recorded_at')} type="date" className="input max-w-full" style={{ minWidth: 0 }} />
           </div>
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
