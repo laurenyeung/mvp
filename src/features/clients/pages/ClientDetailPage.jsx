@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Plus, Calendar, CheckCircle2, XCircle, Clock, Trash2 } from 'lucide-react'
 import { coachApi } from '@/lib/api'
@@ -116,10 +116,10 @@ export default function ClientDetailPage() {
           {workouts?.map(w => {
             const { icon: Icon, color, label } = STATUS[resolveStatus(w)] || STATUS.SCHEDULED
             return (
-              <div
+              <Link
                 key={w.id}
-                onClick={() => navigate(`/coach/workouts/${w.id}`)}
-                className="card p-3.5 flex items-center gap-3 cursor-pointer hover:shadow-md transition-shadow"
+                to={`/coach/workouts/${w.id}`}
+                className="card p-3.5 flex items-center gap-3 hover:shadow-md transition-shadow"
               >
                 <Icon size={18} className={cn(color, 'shrink-0')} />
                 <div className="flex-1 min-w-0">
@@ -132,13 +132,13 @@ export default function ClientDetailPage() {
                 )}
                 {(w.status === 'SCHEDULED' || resolveStatus(w) === 'INCOMPLETE') && (
                   <button
-                    onClick={e => { e.stopPropagation(); deleteWorkout(w.id) }}
+                    onClick={e => { e.preventDefault(); e.stopPropagation(); deleteWorkout(w.id) }}
                     className="text-gray-300 hover:text-red-400 p-2 transition-colors"
                   >
                     <Trash2 size={16} />
                   </button>
                 )}
-              </div>
+              </Link>
             )
           })}
         </div>

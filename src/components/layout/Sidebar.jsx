@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Users, Dumbbell, LayoutTemplate, Calendar, History, LogOut } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -22,6 +23,7 @@ export default function Sidebar({ role }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const items = role === 'COACH' ? coachNav : clientNav
+  const [confirming, setConfirming] = useState(false)
 
   const handleLogout = async () => {
     try { await authApi.logout() } catch { /* server may be unreachable; clear locally anyway */ }
@@ -82,13 +84,26 @@ export default function Sidebar({ role }) {
           </div>
         </div>
         <button
-          onClick={handleLogout}
+          onClick={() => setConfirming(true)}
           className="btn-ghost w-full justify-start gap-2 text-sm"
         >
           <LogOut size={15} />
           Sign out
         </button>
       </div>
+
+      {confirming && (
+        <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl w-full max-w-xs p-6 shadow-card-hover">
+            <p className="text-base font-semibold text-gray-900 text-center mb-1">Sign out?</p>
+            <p className="text-sm text-gray-400 text-center mb-5">You'll need to log back in to access your account.</p>
+            <div className="flex flex-col gap-2">
+              <button onClick={handleLogout} className="btn-primary w-full py-2.5">Sign out</button>
+              <button onClick={() => setConfirming(false)} className="btn-ghost w-full py-2.5">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   )
 }
