@@ -225,6 +225,7 @@ export default function WorkoutLogPage() {
   const [isRequestingReschedule, setIsRequestingReschedule] = useState(false)
   const [rescheduleDate, setRescheduleDate] = useState('')
   const [rescheduleSuccess, setRescheduleSuccess] = useState(false)
+  const [rescheduleError, setRescheduleError] = useState('')
 
   if (workout && !initialized) {
     setLogState(initLogs(workout.exercises))
@@ -273,6 +274,12 @@ export default function WorkoutLogPage() {
     onSuccess: () => {
       setIsRequestingReschedule(false)
       setRescheduleSuccess(true)
+      setRescheduleError('')
+      qc.invalidateQueries({ queryKey: ['workout', id] })
+    },
+    onError: (err) => {
+      const msg = err.response?.data?.error?.message
+      setRescheduleError(msg || 'Failed to send request. Please try again.')
     },
   })
 
@@ -361,27 +368,32 @@ export default function WorkoutLogPage() {
           )}
         </div>
         {isRequestingReschedule && (
-          <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <input
-              type="date"
-              value={rescheduleDate}
-              onChange={e => setRescheduleDate(e.target.value)}
-              className="input text-sm py-1 px-2 h-8"
-              style={{ width: '9.5rem' }}
-            />
-            <button
-              onClick={() => submitReschedule()}
-              disabled={isReschedulePending || !rescheduleDate}
-              className="btn-primary py-1 px-3 text-xs shrink-0"
-            >
-              {isReschedulePending ? 'Sending…' : 'Request'}
-            </button>
-            <button
-              onClick={() => setIsRequestingReschedule(false)}
-              className="btn-ghost py-1 px-2 text-xs shrink-0"
-            >
-              Cancel
-            </button>
+          <div className="mt-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="date"
+                value={rescheduleDate}
+                onChange={e => { setRescheduleDate(e.target.value); setRescheduleError('') }}
+                className="input text-sm py-1 px-2 h-8"
+                style={{ width: '9.5rem' }}
+              />
+              <button
+                onClick={() => submitReschedule()}
+                disabled={isReschedulePending || !rescheduleDate}
+                className="btn-primary py-1 px-3 text-xs shrink-0"
+              >
+                {isReschedulePending ? 'Sending…' : 'Request'}
+              </button>
+              <button
+                onClick={() => { setIsRequestingReschedule(false); setRescheduleError('') }}
+                className="btn-ghost py-1 px-2 text-xs shrink-0"
+              >
+                Cancel
+              </button>
+            </div>
+            {rescheduleError && (
+              <p className="text-red-500 text-xs mt-1">{rescheduleError}</p>
+            )}
           </div>
         )}
       </div>
