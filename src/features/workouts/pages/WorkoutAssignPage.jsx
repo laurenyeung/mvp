@@ -206,9 +206,9 @@ export default function WorkoutAssignPage() {
             </select>
           </div>
 
-          <div className="overflow-hidden">
+          <div>
             <label className="label">Date *</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input" style={{ minWidth: 0 }} />
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input" style={{ minWidth: 0, WebkitAppearance: 'none', appearance: 'none' }} />
           </div>
 
           <div>
