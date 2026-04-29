@@ -10,7 +10,7 @@ export default function AppShell() {
   const initials = `${user?.first_name?.[0] ?? ''}${user?.last_name?.[0] ?? ''}`
 
   return (
-    <div className="flex h-screen overflow-hidden bg-pixel-bg">
+    <div className="flex h-full overflow-hidden bg-pixel-bg">
       {!isMobile && <Sidebar role={user?.role} />}
       <main className="flex-1 flex flex-col min-h-0 overflow-y-auto pb-safe md:pb-0">
         {isMobile && (
