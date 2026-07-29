@@ -7,6 +7,10 @@ Perform a staff-engineer-level code review of the specified PR, diff, or files.
 3. Run through each checklist below
 4. Report findings grouped by severity: Critical → High → Medium → Low → Nit
 
+## Pre-check
+- [ ] Run linter (`npm run lint` or equivalent) — no new warnings or errors
+- [ ] Run type checker (`tsc --noEmit` or equivalent) — clean
+
 ## Correctness
 - [ ] Does the implementation match the stated intent?
 - [ ] Are there off-by-one errors, null dereferences, or unhandled edge cases?
