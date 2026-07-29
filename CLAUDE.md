@@ -141,6 +141,8 @@ Every change must pass this baseline before merging:
 - Parameterised queries only — never interpolate user input into SQL
 - `helmet()` stays on, body cap stays at `64kb`
 - Run `npm audit` after every `npm install` — fix moderate+ before merging
+- Any operation writing to multiple tables must use `BEGIN/COMMIT` — partial writes corrupt state
+- When a field, status, or enum value is removed, delete every reference across all layers in the same task
 
 > Full audit checklist for a route, PR, or file: `/security`
 
