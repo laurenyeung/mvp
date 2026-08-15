@@ -23,6 +23,10 @@
     overflow: hidden;
   }
 
+  #root {
+    height: 100%;
+  }
+
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: #F0F0F0; }
   ::-webkit-scrollbar-thumb { background: #D0D0D0; border-radius: 3px; }
