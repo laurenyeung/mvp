@@ -96,15 +96,22 @@ router.patch('/:id', requireRole('COACH', 'ADMIN'), async (req, res, next) => {
       return res.status(403).json({ error: { code: 'NOT_YOUR_RESOURCE', message: 'Forbidden' } })
     }
 
-    const { name, description, is_public, youtube_url } = parsed.data
+    const data = parsed.data
+    const sets = []
+    const params = []
+    for (const key of ['name', 'description', 'is_public', 'youtube_url']) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        params.push(data[key])
+        sets.push(`${key}=$${params.length}`)
+      }
+    }
+    if (!sets.length) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'No fields to update' } })
+    }
+    params.push(idParsed.data)
     const { rows } = await query(
-      `UPDATE exercises
-       SET name=COALESCE($1,name),
-           description=COALESCE($2,description),
-           is_public=COALESCE($3,is_public),
-           youtube_url=COALESCE($4,youtube_url)
-       WHERE id=$5 RETURNING *`,
-      [name ?? null, description ?? null, is_public ?? null, youtube_url ?? null, idParsed.data]
+      `UPDATE exercises SET ${sets.join(', ')} WHERE id=$${params.length} RETURNING *`,
+      params
     )
     logger.info('EXERCISE_UPDATED', { exerciseId: idParsed.data, userId: req.user.id, requestId: req.id })
     res.json({ data: rows[0] })

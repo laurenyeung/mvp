@@ -3056,7 +3056,20 @@ describe('Section 31 — YouTube URL & is_public Toggle on Exercises', () => {
     expect(res.body.data.exercises[0].youtube_url).toBe('https://youtu.be/dQw4w9WgXcQ')
   })
 
-  test('TC-YT-007 · Client cannot PATCH an exercise (403)', async () => {
+  test('TC-YT-007 · PATCH exercise with youtube_url: null removes it', async () => {
+    const res = await request(app)
+      .patch(`/api/v1/exercises/${ytExerciseId}`)
+      .set('Cookie', coachCookies)
+      .send({ youtube_url: null })
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.youtube_url).toBeNull()
+
+    const { rows } = await testPool.query('SELECT youtube_url FROM exercises WHERE id=$1', [ytExerciseId])
+    expect(rows[0].youtube_url).toBeNull()
+  })
+
+  test('TC-YT-008 · Client cannot PATCH an exercise (403)', async () => {
     const res = await request(app)
       .patch(`/api/v1/exercises/${ytExerciseId}`)
       .set('Cookie', clientCookies)
