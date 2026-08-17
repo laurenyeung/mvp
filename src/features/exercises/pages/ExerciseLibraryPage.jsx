@@ -1,18 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Dumbbell, X, ChevronDown, ChevronUp, Pencil } from 'lucide-react'
+import { Plus, Search, Dumbbell, X, Pencil } from 'lucide-react'
 import { exercisesApi } from '@/lib/api'
 import { useAuthStore } from '@/features/auth/store/authStore'
+import { getYouTubeId } from '@/lib/youtube'
+import YouTubeDemoEmbed from '@/components/shared/YouTubeDemoEmbed.jsx'
 import CreateExerciseModal from '../components/CreateExerciseModal.jsx'
 
-function getYouTubeId(url) {
-  if (!url) return null
-  const m = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
-  return m ? m[1] : null
-}
-
 function ExerciseCard({ ex, user, onEdit }) {
-  const [demoOpen, setDemoOpen] = useState(false)
   const ytId = getYouTubeId(ex.youtube_url)
   const qc = useQueryClient()
   const isOwner = user?.id && ex.created_by === user.id
@@ -52,25 +47,7 @@ function ExerciseCard({ ex, user, onEdit }) {
 
       {ytId && (
         <div className="px-4 pb-3">
-          <button
-            onClick={() => setDemoOpen(o => !o)}
-            className="w-full flex items-center justify-between bg-orange-50 rounded-lg px-3 py-2"
-          >
-            <p className="text-xs font-medium text-orange-600">Example Video</p>
-            {demoOpen ? <ChevronUp size={13} className="text-orange-400" /> : <ChevronDown size={13} className="text-orange-400" />}
-          </button>
-          {demoOpen && (
-            <div className="flex justify-center mt-2">
-              <div className="relative rounded-xl overflow-hidden bg-black" style={{ width: '180px', aspectRatio: '9/16' }}>
-                <iframe
-                  src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&loop=1&playlist=${ytId}&mute=1&controls=0&playsinline=1&modestbranding=1&rel=0`}
-                  className="absolute inset-0 w-full h-full"
-                  allow="autoplay; encrypted-media"
-                  allowFullScreen
-                />
-              </div>
-            </div>
-          )}
+          <YouTubeDemoEmbed youtubeUrl={ex.youtube_url} />
         </div>
       )}
 

@@ -61,6 +61,14 @@ export const exercisesApi = {
   delete: (id)           => api.delete(`/exercises/${id}`),
 }
 
+export const seriesApi = {
+  list:   ()             => api.get('/series'),
+  get:    (id)           => api.get(`/series/${id}`),
+  create: (body)         => api.post('/series', body),
+  update: (id, body)     => api.put(`/series/${id}`, body),
+  delete: (id)           => api.delete(`/series/${id}`),
+}
+
 export const coachApi = {
   // Templates
   listTemplates:   ()          => api.get('/coach/templates'),

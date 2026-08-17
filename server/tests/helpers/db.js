@@ -20,6 +20,7 @@ export async function cleanDatabase() {
   const TEST_WK_LOGS   = `SELECT id FROM workout_logs WHERE workout_id IN (${TEST_WORKOUTS})`
   const TEST_EX_LOGS   = `SELECT id FROM exercise_logs WHERE workout_log_id IN (${TEST_WK_LOGS})`
   const TEST_THREADS   = `SELECT id FROM message_threads WHERE coach_id IN (${TEST_COACHES}) OR client_id IN (${TEST_CLIENTS})`
+  const TEST_SERIES    = `SELECT id FROM series WHERE coach_id IN (${TEST_COACHES})`
 
   await testPool.query(`DELETE FROM notifications                WHERE user_id       IN (${TEST_USERS})`)
   await testPool.query(`DELETE FROM activity                     WHERE user_id       IN (${TEST_USERS})`)
@@ -35,6 +36,8 @@ export async function cleanDatabase() {
   await testPool.query(`DELETE FROM workouts                     WHERE coach_id      IN (${TEST_COACHES}) OR client_id IN (${TEST_CLIENTS})`)
   await testPool.query(`DELETE FROM workout_template_exercises   WHERE workout_template_id IN (${TEST_TEMPLATES})`)
   await testPool.query(`DELETE FROM workout_templates            WHERE coach_id      IN (${TEST_COACHES})`)
+  await testPool.query(`DELETE FROM series_exercises             WHERE series_id     IN (${TEST_SERIES})`)
+  await testPool.query(`DELETE FROM series                       WHERE coach_id      IN (${TEST_COACHES})`)
   await testPool.query(`DELETE FROM exercise_media               WHERE exercise_id   IN (SELECT id FROM exercises WHERE created_by IN (${TEST_USERS}))`)
   await testPool.query(`DELETE FROM exercises                    WHERE created_by    IN (${TEST_USERS})`)
   await testPool.query(`DELETE FROM exercises                    WHERE name LIKE '%_TEST_%'`)

@@ -19,6 +19,8 @@ import ProgressPage from '@/features/progress/pages/ProgressPage.jsx'
 
 // Shared pages
 import ExerciseLibraryPage from '@/features/exercises/pages/ExerciseLibraryPage.jsx'
+import SeriesListPage from '@/features/series/pages/SeriesListPage.jsx'
+import SeriesDetailPage from '@/features/series/pages/SeriesDetailPage.jsx'
 import MessagingPage from '@/features/messaging/pages/MessagingPage.jsx'
 
 import RoleRedirect from '@/components/layout/RoleRedirect.jsx'
@@ -57,6 +59,8 @@ export const router = createBrowserRouter([
 
       // Shared routes
       { path: 'exercises', element: <ExerciseLibraryPage /> },
+      { path: 'series', element: <SeriesListPage /> },
+      { path: 'series/:id', element: <SeriesDetailPage /> },
       { path: 'messages', element: <MessagingPage /> },
     ],
   },
