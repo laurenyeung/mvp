@@ -2083,6 +2083,32 @@ describe('Section 24 — Exercise Ownership Enforcement', () => {
     coach2ExerciseId = res.body.data.id
   })
 
+  test('TC-EX-OWNER-VIS-001 · GET /exercises as Coach 1 includes Coach 2\'s exercise (all exercises visible to every coach)', async () => {
+    const res = await request(app)
+      .get('/api/v1/exercises')
+      .set('Cookie', coachCookies)
+    expect(res.status).toBe(200)
+    expect(res.body.data.find(e => e.id === coach2ExerciseId)).toBeTruthy()
+  })
+
+  test('TC-EX-OWNER-VIS-002 · GET /exercises as Coach 2 includes Coach 1\'s is_public=false exercise', async () => {
+    // exerciseId was created with is_public: false in Section 2 — the flag no
+    // longer restricts visibility, only ownership gates edit/delete.
+    const res = await request(app)
+      .get('/api/v1/exercises')
+      .set('Cookie', coach2Cookies)
+    expect(res.status).toBe(200)
+    expect(res.body.data.find(e => e.id === exerciseId)).toBeTruthy()
+  })
+
+  test('TC-EX-OWNER-VIS-003 · GET /exercises/:id as Coach 2 can fetch Coach 1\'s private-flagged exercise', async () => {
+    const res = await request(app)
+      .get(`/api/v1/exercises/${exerciseId}`)
+      .set('Cookie', coach2Cookies)
+    expect(res.status).toBe(200)
+    expect(res.body.data.id).toBe(exerciseId)
+  })
+
   test('TC-EX-OWNER-002 · Coach 1 cannot PATCH Coach 2\'s exercise', async () => {
     const res = await request(app)
       .patch(`/api/v1/exercises/${coach2ExerciseId}`)

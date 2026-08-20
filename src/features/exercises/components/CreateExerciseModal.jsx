@@ -16,9 +16,8 @@ export default function CreateExerciseModal({ onClose, exercise }) {
           name: exercise.name || '',
           description: exercise.description || '',
           youtube_url: exercise.youtube_url || '',
-          is_public: exercise.is_public ?? false,
         }
-      : { is_public: false },
+      : {},
   })
 
   const { mutate, isPending, error } = useMutation({
@@ -63,11 +62,6 @@ export default function CreateExerciseModal({ onClose, exercise }) {
             />
             <p className="text-xs text-gray-400 mt-1">Paste a YouTube Short or video link — it will play as a looping demo on the exercise card. Clear the field to remove it.</p>
           </div>
-
-          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-            <input {...register('is_public')} type="checkbox" className="rounded" />
-            Make public (visible to all coaches)
-          </label>
 
           {error && (
             <p className="text-red-500 text-sm">{error.response?.data?.error?.message || 'Something went wrong'}</p>
