@@ -349,6 +349,29 @@ describe('Section 2 — Exercise Library', () => {
       .send({ primary_muscle_group: 'Legs' })
     expect(res.status).toBe(400)
   })
+
+  test('TC-EXERCISE-006 · GET /exercises?limit=2 includes a total count and respects the limit', async () => {
+    const res = await request(app)
+      .get('/api/v1/exercises?limit=2')
+      .set('Cookie', coachCookies)
+    expect(res.status).toBe(200)
+    expect(typeof res.body.total).toBe('number')
+    expect(res.body.total).toBeGreaterThanOrEqual(2) // at least exerciseId + exercise2Id
+    expect(res.body.data.length).toBeLessThanOrEqual(2)
+  })
+
+  test('TC-EXERCISE-007 · GET /exercises?limit=1 page=1 vs page=2 return non-overlapping ids', async () => {
+    const page1 = await request(app)
+      .get('/api/v1/exercises?limit=1&page=1')
+      .set('Cookie', coachCookies)
+    const page2 = await request(app)
+      .get('/api/v1/exercises?limit=1&page=2')
+      .set('Cookie', coachCookies)
+
+    expect(page1.body.data).toHaveLength(1)
+    expect(page2.body.data).toHaveLength(1)
+    expect(page1.body.data[0].id).not.toBe(page2.body.data[0].id)
+  })
 })
 
 // =============================================================================
