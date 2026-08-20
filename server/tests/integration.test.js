@@ -2111,6 +2111,30 @@ describe('Section 24 — Exercise Ownership Enforcement', () => {
     expect(res.body.data.name).toBe('Coach2_TEST_BenchPress_Updated')
   })
 
+  test('TC-EX-OWNER-DEL-001 · Deleting an exercise referenced by a Series returns 409, not a raw 500', async () => {
+    const exRes = await request(app)
+      .post('/api/v1/exercises')
+      .set('Cookie', coachCookies)
+      .send({ name: 'FKConflict_TEST_Exercise' })
+    expect(exRes.status).toBe(201)
+    const fkExerciseId = exRes.body.data.id
+
+    const seriesRes = await request(app)
+      .post('/api/v1/series')
+      .set('Cookie', coachCookies)
+      .send({ title: 'FKConflict_TEST_Series', exercises: [{ exercise_id: fkExerciseId }] })
+    expect(seriesRes.status).toBe(201)
+
+    const delRes = await request(app)
+      .delete(`/api/v1/exercises/${fkExerciseId}`)
+      .set('Cookie', coachCookies)
+    expect(delRes.status).toBe(409)
+    expect(delRes.body.error.code).toBe('CONFLICT')
+
+    const { rows } = await testPool.query('SELECT id FROM exercises WHERE id=$1', [fkExerciseId])
+    expect(rows).toHaveLength(1) // not deleted
+  })
+
   test('TC-EX-OWNER-005 · Coach 2 can DELETE their own exercise', async () => {
     const res = await request(app)
       .delete(`/api/v1/exercises/${coach2ExerciseId}`)

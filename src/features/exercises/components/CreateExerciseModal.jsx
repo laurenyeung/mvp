@@ -1,13 +1,15 @@
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { X } from 'lucide-react'
+import { X, Trash2 } from 'lucide-react'
 import { exerciseSchema } from '@/lib/validationSchemas'
 import { exercisesApi } from '@/lib/api'
 
 export default function CreateExerciseModal({ onClose, exercise }) {
   const qc = useQueryClient()
   const isEdit = !!exercise
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(exerciseSchema),
@@ -28,6 +30,14 @@ export default function CreateExerciseModal({ onClose, exercise }) {
         ? exercisesApi.update(exercise.id, payload)
         : exercisesApi.create(payload)
     },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['exercises'] })
+      onClose()
+    },
+  })
+
+  const { mutate: deleteExercise, isPending: isDeleting, error: deleteError } = useMutation({
+    mutationFn: () => exercisesApi.delete(exercise?.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['exercises'] })
       onClose()
@@ -79,8 +89,44 @@ export default function CreateExerciseModal({ onClose, exercise }) {
               {isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Exercise'}
             </button>
           </div>
+
+          {isEdit && (
+            <div className="pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(true)}
+                className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-600 font-medium pt-3"
+              >
+                <Trash2 size={14} /> Delete this exercise
+              </button>
+            </div>
+          )}
         </form>
       </div>
+
+      {confirmingDelete && (
+        <div className="fixed inset-0 z-[110] bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-card border border-pixel-border p-6 max-w-sm w-full">
+            <h3 className="font-bold text-gray-900 text-lg mb-1">Delete exercise?</h3>
+            <p className="text-sm text-gray-500 mb-5">This cannot be undone.</p>
+            {deleteError && (
+              <p className="text-red-500 text-sm mb-4">
+                {deleteError.response?.data?.error?.message || 'Something went wrong'}
+              </p>
+            )}
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmingDelete(false)} className="btn-ghost flex-1">Cancel</button>
+              <button
+                onClick={() => deleteExercise()}
+                disabled={isDeleting}
+                className="flex-1 btn bg-red-500 text-white hover:bg-red-600 active:scale-95"
+              >
+                {isDeleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
