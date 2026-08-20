@@ -14,6 +14,7 @@ import coachRoutes    from './routes/coach.js'
 import clientRoutes   from './routes/client.js'
 import messageRoutes  from './routes/messages.js'
 import mediaRoutes    from './routes/media.js'
+import seriesRoutes   from './routes/series.js'
 
 // ─── Validate required env vars at startup ────────────────────────────────────
 const REQUIRED_ENV = ['DATABASE_URL', 'JWT_SECRET']
@@ -141,6 +142,7 @@ app.use('/api/v1/coach',     coachRoutes)
 app.use('/api/v1/client',    clientRoutes)
 app.use('/api/v1/messages',  messageRoutes)
 app.use('/api/v1/media',     mediaRoutes)
+app.use('/api/v1/series',    seriesRoutes)
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 app.use((_req, res) => {

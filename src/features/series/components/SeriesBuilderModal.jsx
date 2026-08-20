@@ -1,0 +1,215 @@
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { X, Plus, GripVertical, Trash2, Search } from 'lucide-react'
+import { seriesApi, exercisesApi } from '@/lib/api'
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+
+// Thin sortable wrapper — applies transform/opacity and passes drag handle props down
+function SortableSlot({ id, children }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+      }}
+    >
+      {children({ dragHandleProps: { ...listeners, ...attributes } })}
+    </div>
+  )
+}
+
+function ExerciseSlot({ ex, flatIdx, onRemove, dragHandleProps }) {
+  return (
+    <div className="card p-3 flex items-center gap-2">
+      <button
+        {...dragHandleProps}
+        className="text-gray-300 shrink-0 cursor-grab active:cursor-grabbing p-0.5 -ml-0.5"
+        style={{ touchAction: 'none' }}
+        tabIndex={-1}
+      >
+        <GripVertical size={16} />
+      </button>
+      <span className="text-sm font-medium text-gray-900 flex-1">{ex.name}</span>
+      <button onClick={() => onRemove(flatIdx)} className="text-gray-400 hover:text-red-500 p-1">
+        <Trash2 size={14} />
+      </button>
+    </div>
+  )
+}
+
+export default function SeriesBuilderModal({ series, onClose }) {
+  const qc = useQueryClient()
+  const isEdit = !!series
+
+  const [title, setTitle] = useState(series?.title || '')
+  const [description, setDescription] = useState(series?.description || '')
+  const [exercises, setExercises] = useState(
+    (series?.exercises || []).map(ex => ({ ...ex, _key: crypto.randomUUID() }))
+  )
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [exSearch, setExSearch] = useState('')
+  const [saveError, setSaveError] = useState('')
+
+  const { data: exerciseResults } = useQuery({
+    queryKey: ['exercises', exSearch],
+    queryFn: () => exercisesApi.list({ search: exSearch, limit: 20 }).then(r => r.data.data),
+    enabled: pickerOpen,
+  })
+
+  const { mutate, isPending } = useMutation({
+    mutationFn: (body) =>
+      isEdit
+        ? seriesApi.update(series.id, body)
+        : seriesApi.create(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['series'] })
+      onClose()
+    },
+    onError: (err) => {
+      const msg = err.response?.data?.error?.message
+      setSaveError(msg || 'Something went wrong')
+    },
+  })
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { delay: 250, tolerance: 5 },
+    })
+  )
+
+  const addExercise = (ex) => {
+    setExercises(prev => [...prev, { ...ex, exercise_id: ex.id, _key: crypto.randomUUID() }])
+    setPickerOpen(false)
+    setExSearch('')
+  }
+
+  const removeExercise = (flatIdx) => setExercises(prev => prev.filter((_, i) => i !== flatIdx))
+
+  const handleDragEnd = ({ active, over }) => {
+    if (over && active.id !== over.id) {
+      setExercises(prev => {
+        const oldIdx = prev.findIndex(ex => ex._key === active.id)
+        const newIdx = prev.findIndex(ex => ex._key === over.id)
+        return arrayMove(prev, oldIdx, newIdx)
+      })
+    }
+  }
+
+  const handleSave = () => {
+    if (!title.trim()) return
+    mutate({
+      title,
+      description,
+      exercises: exercises.map((ex, i) => ({
+        exercise_id: ex.exercise_id ?? ex.id,
+        order_index: i,
+      })),
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl w-full max-w-lg border border-pixel-border max-h-[90vh] flex flex-col shadow-card-hover">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-pixel-border shrink-0">
+          <h2 className="font-semibold text-gray-900">{isEdit ? 'Edit Series' : 'New Series'}</h2>
+          <button onClick={onClose} className="btn-ghost p-1.5"><X size={18} /></button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          <div>
+            <label className="label">Series Title *</label>
+            <input value={title} onChange={e => { setTitle(e.target.value); setSaveError('') }} className="input" placeholder="e.g. Mobility Foundations" />
+          </div>
+          <div>
+            <label className="label">Description</label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} className="input resize-none min-h-[60px]" placeholder="Optional…" />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Exercises</span>
+              <button onClick={() => { setPickerOpen(true); setExSearch('') }} className="btn-ghost text-brand-600 gap-1 text-sm py-1">
+                <Plus size={15} /> Add
+              </button>
+            </div>
+
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={exercises.map(ex => ex._key)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {exercises.length === 0 && (
+                    <p className="text-xs text-gray-300 text-center py-3 border border-dashed border-gray-200 rounded-lg">
+                      No exercises yet
+                    </p>
+                  )}
+                  {exercises.map((ex, flatIdx) => (
+                    <SortableSlot key={ex._key} id={ex._key}>
+                      {({ dragHandleProps }) => (
+                        <ExerciseSlot ex={ex} flatIdx={flatIdx} onRemove={removeExercise} dragHandleProps={dragHandleProps} />
+                      )}
+                    </SortableSlot>
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+
+            {pickerOpen && (
+              <div className="card border-pixel-line p-3 mt-2">
+                <div className="relative mb-2">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={exSearch}
+                    onChange={e => setExSearch(e.target.value)}
+                    placeholder="Search exercises…"
+                    className="input pl-9 text-sm py-2"
+                    autoFocus
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {exerciseResults?.map(ex => (
+                    <button
+                      key={ex.id}
+                      onClick={() => addExercise(ex)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 hover:text-pixel-accent flex items-center justify-between border-l-2 border-transparent hover:border-pixel-accent"
+                    >
+                      <span className="font-medium">{ex.name}</span>
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setPickerOpen(false)} className="btn-ghost text-sm w-full mt-2">Cancel</button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t border-pixel-border shrink-0">
+          {saveError && <p className="text-red-500 text-sm mb-3">{saveError}</p>}
+          <div className="flex gap-3">
+            <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
+            <button onClick={handleSave} disabled={isPending || !title.trim()} className="btn-primary flex-1">
+              {isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Series'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Users, Dumbbell, LayoutTemplate, Calendar, History, LogOut } from 'lucide-react'
+import { Users, Dumbbell, LayoutTemplate, Calendar, History, LogOut, Layers } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/features/auth/store/authStore'
@@ -10,12 +10,14 @@ const coachNav = [
   { to: '/coach/clients', icon: Users, label: 'Clients' },
   { to: '/coach/templates', icon: LayoutTemplate, label: 'Templates' },
   { to: '/exercises', icon: Dumbbell, label: 'Exercises' },
+  { to: '/series', icon: Layers, label: 'Series' },
 ]
 
 const clientNav = [
   { to: '/client/today', icon: Calendar, label: 'Upcoming' },
   { to: '/client/history', icon: History, label: 'History' },
   { to: '/exercises', icon: Dumbbell, label: 'Exercises' },
+  { to: '/series', icon: Layers, label: 'Series' },
 ]
 
 export default function MobileNav({ role }) {

@@ -3490,3 +3490,254 @@ describe('Section 34 — Reschedule Requests', () => {
     expect(res.status).toBe(404)
   })
 })
+
+// =============================================================================
+// SECTION 35 — Series
+// Covers: create/list/detail/reorder/remove/delete, role gating, cross-coach
+// isolation, and the roster-wide visibility contract (a coach's clients see
+// all of that coach's series with no per-client assignment step).
+// Depends on: coachCookies, clientCookies, coach2Cookies, exerciseId, exercise2Id
+// =============================================================================
+describe('Section 35 — Series', () => {
+  let seriesId
+  let coach2ClientCookies
+  const SERIES_CLIENT2_EMAIL = 'series_client2_test@example.com'
+
+  test('TC-SER-001 · Coach creates Series with title only — 201, stored in DB', async () => {
+    const res = await request(app)
+      .post('/api/v1/series')
+      .set('Cookie', coachCookies)
+      .send({ title: 'Series_title_only_test' })
+
+    expect(res.status).toBe(201)
+    expect(res.body.data.title).toBe('Series_title_only_test')
+    expect(res.body.data.id).toBeTruthy()
+
+    const { rows } = await testPool.query('SELECT * FROM series WHERE id=$1', [res.body.data.id])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].is_archived).toBe(false)
+  })
+
+  test('TC-SER-002 · Coach creates Series with description + ordered exercises — order_index persisted', async () => {
+    const res = await request(app)
+      .post('/api/v1/series')
+      .set('Cookie', coachCookies)
+      .send({
+        title: 'Series_main_test',
+        description: 'A curated list',
+        exercises: [
+          { exercise_id: exercise2Id, order_index: 0 },
+          { exercise_id: exerciseId, order_index: 1 },
+        ],
+      })
+
+    expect(res.status).toBe(201)
+    seriesId = res.body.data.id
+
+    const { rows } = await testPool.query(
+      'SELECT exercise_id, order_index FROM series_exercises WHERE series_id=$1 ORDER BY order_index',
+      [seriesId]
+    )
+    expect(rows).toHaveLength(2)
+    expect(rows[0].exercise_id).toBe(exercise2Id)
+    expect(rows[0].order_index).toBe(0)
+    expect(rows[1].exercise_id).toBe(exerciseId)
+    expect(rows[1].order_index).toBe(1)
+  })
+
+  test('TC-SER-003 · POST with invalid exercise_id — 400, nothing inserted', async () => {
+    const res = await request(app)
+      .post('/api/v1/series')
+      .set('Cookie', coachCookies)
+      .send({
+        title: 'Series_invalid_test',
+        exercises: [{ exercise_id: '00000000-0000-4000-8000-000000000000' }],
+      })
+
+    expect(res.status).toBe(400)
+    expect(res.body.error.code).toBe('VALIDATION_ERROR')
+
+    const { rows } = await testPool.query('SELECT id FROM series WHERE title=$1', ['Series_invalid_test'])
+    expect(rows).toHaveLength(0)
+  })
+
+  test('TC-SER-004 · GET /series as creating coach — includes full nested exercises (not just a count)', async () => {
+    // The list endpoint must return the same nested `exercises` shape as the detail
+    // endpoint — the edit modal opens directly off list-page data, so if this ever
+    // regresses to a bare count, editing a series from the list would silently wipe it.
+    const res = await request(app)
+      .get('/api/v1/series')
+      .set('Cookie', coachCookies)
+
+    expect(res.status).toBe(200)
+    const entry = res.body.data.find(s => s.id === seriesId)
+    expect(entry).toBeTruthy()
+    expect(entry.exercises).toHaveLength(2)
+    expect(entry.exercises[0].exercise_id).toBe(exercise2Id)
+    expect(entry.exercises[0].name).toBeTruthy()
+  })
+
+  test('TC-SER-005 · GET /series/:id as creating coach — exercises ordered with joined fields', async () => {
+    const res = await request(app)
+      .get(`/api/v1/series/${seriesId}`)
+      .set('Cookie', coachCookies)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.exercises).toHaveLength(2)
+    expect(res.body.data.exercises[0].exercise_id).toBe(exercise2Id)
+    expect(res.body.data.exercises[0].name).toBeTruthy()
+    expect(res.body.data.exercises[1].exercise_id).toBe(exerciseId)
+  })
+
+  test('TC-SER-006 · GET /series as that coach\'s client — visible with no assignment step', async () => {
+    const res = await request(app)
+      .get('/api/v1/series')
+      .set('Cookie', clientCookies)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.find(s => s.id === seriesId)).toBeTruthy()
+  })
+
+  test('TC-SER-007 · GET /series/:id as that coach\'s client — full read access', async () => {
+    const res = await request(app)
+      .get(`/api/v1/series/${seriesId}`)
+      .set('Cookie', clientCookies)
+
+    expect(res.status).toBe(200)
+    expect(res.body.data.exercises).toHaveLength(2)
+  })
+
+  test('TC-SER-008 · PUT reorders exercises — GET reflects new order', async () => {
+    const res = await request(app)
+      .put(`/api/v1/series/${seriesId}`)
+      .set('Cookie', coachCookies)
+      .send({
+        exercises: [
+          { exercise_id: exerciseId, order_index: 0 },
+          { exercise_id: exercise2Id, order_index: 1 },
+        ],
+      })
+    expect(res.status).toBe(200)
+
+    const check = await request(app)
+      .get(`/api/v1/series/${seriesId}`)
+      .set('Cookie', coachCookies)
+    expect(check.body.data.exercises[0].exercise_id).toBe(exerciseId)
+    expect(check.body.data.exercises[1].exercise_id).toBe(exercise2Id)
+  })
+
+  test('TC-SER-009 · PUT removes an exercise — GET reflects removal', async () => {
+    const res = await request(app)
+      .put(`/api/v1/series/${seriesId}`)
+      .set('Cookie', coachCookies)
+      .send({ exercises: [{ exercise_id: exerciseId, order_index: 0 }] })
+    expect(res.status).toBe(200)
+
+    const check = await request(app)
+      .get(`/api/v1/series/${seriesId}`)
+      .set('Cookie', coachCookies)
+    expect(check.body.data.exercises).toHaveLength(1)
+    expect(check.body.data.exercises[0].exercise_id).toBe(exerciseId)
+  })
+
+  test('TC-SER-010 · PUT with exercises omitted — only title/description change', async () => {
+    const res = await request(app)
+      .put(`/api/v1/series/${seriesId}`)
+      .set('Cookie', coachCookies)
+      .send({ title: 'Series_main_test_renamed' })
+    expect(res.status).toBe(200)
+    expect(res.body.data.title).toBe('Series_main_test_renamed')
+
+    const check = await request(app)
+      .get(`/api/v1/series/${seriesId}`)
+      .set('Cookie', coachCookies)
+    expect(check.body.data.exercises).toHaveLength(1)
+  })
+
+  test('TC-SER-011 · Client cannot POST /series — 403', async () => {
+    const res = await request(app)
+      .post('/api/v1/series')
+      .set('Cookie', clientCookies)
+      .send({ title: 'Client_should_not_create' })
+    expect(res.status).toBe(403)
+  })
+
+  test('TC-SER-012 · Client cannot PUT /series/:id — 403', async () => {
+    const res = await request(app)
+      .put(`/api/v1/series/${seriesId}`)
+      .set('Cookie', clientCookies)
+      .send({ title: 'Client_should_not_edit' })
+    expect(res.status).toBe(403)
+  })
+
+  test('TC-SER-013 · Client cannot DELETE /series/:id — 403', async () => {
+    const res = await request(app)
+      .delete(`/api/v1/series/${seriesId}`)
+      .set('Cookie', clientCookies)
+    expect(res.status).toBe(403)
+  })
+
+  test('TC-SER-014 · Coach 2 cannot PUT or DELETE Coach 1\'s Series — 404', async () => {
+    const putRes = await request(app)
+      .put(`/api/v1/series/${seriesId}`)
+      .set('Cookie', coach2Cookies)
+      .send({ title: 'Hijacked' })
+    expect(putRes.status).toBe(404)
+
+    const delRes = await request(app)
+      .delete(`/api/v1/series/${seriesId}`)
+      .set('Cookie', coach2Cookies)
+    expect(delRes.status).toBe(404)
+  })
+
+  test('TC-SER-015 · A client of Coach 2 cannot see Coach 1\'s Series', async () => {
+    const registerRes = await request(app)
+      .post('/api/v1/auth/register')
+      .send({ email: SERIES_CLIENT2_EMAIL, password: PASSWORD, first_name: 'Series', last_name: 'ClientTwo', role: 'CLIENT' })
+    const newClientUserId = registerRes.body.data.user.id
+
+    const linkRes = await request(app)
+      .post('/api/v1/coach/clients')
+      .set('Cookie', coach2Cookies)
+      .send({ user_id: newClientUserId })
+    expect(linkRes.status).toBe(201)
+
+    const loginRes = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: SERIES_CLIENT2_EMAIL, password: PASSWORD })
+    coach2ClientCookies = loginRes.headers['set-cookie']
+
+    const listRes = await request(app)
+      .get('/api/v1/series')
+      .set('Cookie', coach2ClientCookies)
+    expect(listRes.status).toBe(200)
+    expect(listRes.body.data.find(s => s.id === seriesId)).toBeUndefined()
+
+    const detailRes = await request(app)
+      .get(`/api/v1/series/${seriesId}`)
+      .set('Cookie', coach2ClientCookies)
+    expect(detailRes.status).toBe(404)
+  })
+
+  test('TC-SER-016 · DELETE is a soft delete — row persists archived, excluded from GETs', async () => {
+    const res = await request(app)
+      .delete(`/api/v1/series/${seriesId}`)
+      .set('Cookie', coachCookies)
+    expect(res.status).toBe(200)
+    expect(res.body.data.deleted).toBe(true)
+
+    const { rows } = await testPool.query('SELECT is_archived FROM series WHERE id=$1', [seriesId])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].is_archived).toBe(true)
+
+    const listRes = await request(app)
+      .get('/api/v1/series')
+      .set('Cookie', coachCookies)
+    expect(listRes.body.data.find(s => s.id === seriesId)).toBeUndefined()
+
+    const detailRes = await request(app)
+      .get(`/api/v1/series/${seriesId}`)
+      .set('Cookie', coachCookies)
+    expect(detailRes.status).toBe(404)
+  })
+})

@@ -132,6 +132,27 @@ CREATE TABLE IF NOT EXISTS workout_template_exercises (
   UNIQUE (workout_template_id, order_index)
 );
 
+-- SERIES (coach-authored, roster-wide-visible ordered exercise lists)
+CREATE TABLE IF NOT EXISTS series (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  coach_id    UUID NOT NULL REFERENCES coach_profiles(id),
+  title       VARCHAR(200) NOT NULL,
+  description TEXT,
+  is_archived BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_series_coach ON series(coach_id);
+
+-- SERIES EXERCISES (ordered, no prescription — just exercise_id + position)
+CREATE TABLE IF NOT EXISTS series_exercises (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  series_id    UUID NOT NULL REFERENCES series(id) ON DELETE CASCADE,
+  exercise_id  UUID NOT NULL REFERENCES exercises(id),
+  order_index  SMALLINT NOT NULL,
+  UNIQUE (series_id, order_index)
+);
+
 -- WORKOUTS (instantiated)
 CREATE TABLE IF NOT EXISTS workouts (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),

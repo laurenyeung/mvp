@@ -71,6 +71,22 @@ export const updateTemplateSchema = createTemplateSchema.partial().extend({
   exercises: z.array(prescribedExerciseSchema).max(50).optional(),
 })
 
+// ─── Series ───────────────────────────────────────────────────────────────────
+const seriesExerciseSchema = z.object({
+  exercise_id: uuidSchema,
+  order_index: z.number().int().min(0).max(200).optional(),
+})
+
+export const createSeriesSchema = z.object({
+  title:       requiredStr(200),
+  description: safeStr(2000).optional(),
+  exercises:   z.array(seriesExerciseSchema).max(50).optional().default([]),
+})
+
+export const updateSeriesSchema = createSeriesSchema.partial().extend({
+  exercises: z.array(seriesExerciseSchema).max(50).optional(),
+})
+
 // ─── Workout assignment ───────────────────────────────────────────────────────
 export const assignWorkoutSchema = z.object({
   template_id:    uuidSchema,
