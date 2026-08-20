@@ -17,9 +17,11 @@ async function resolveVisibleCoachId(user) {
     return rows[0].id
   }
   if (user.role === 'CLIENT') {
+    // A client not yet linked to a coach is a normal, expected state (same
+    // convention client.js already uses for today/upcoming/past/workouts) —
+    // not an error, just "sees no series yet." Callers must check for null.
     const { rows } = await query('SELECT coach_id FROM client_profiles WHERE user_id=$1', [user.id])
-    if (!rows.length) throw Object.assign(new Error('Client profile not found'), { status: 404, code: 'NOT_FOUND' })
-    return rows[0].coach_id
+    return rows.length ? rows[0].coach_id : null
   }
   throw Object.assign(new Error('Forbidden'), { status: 403, code: 'FORBIDDEN' })
 }
@@ -27,6 +29,7 @@ async function resolveVisibleCoachId(user) {
 router.get('/', async (req, res, next) => {
   try {
     const coachId = await resolveVisibleCoachId(req.user)
+    if (!coachId) return res.json({ data: [] })
     const { rows } = await query(
       `SELECT s.*,
          COALESCE(
@@ -53,6 +56,7 @@ router.get('/:id', async (req, res, next) => {
     const idParsed = uuidSchema.safeParse(req.params.id)
     if (!idParsed.success) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Series not found' } })
     const coachId = await resolveVisibleCoachId(req.user)
+    if (!coachId) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Series not found' } })
     const { rows } = await query(
       `SELECT s.*,
          COALESCE(
