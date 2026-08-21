@@ -1245,6 +1245,30 @@ describe('Section 8 — Coach Reviews Client Workout', () => {
     res.body.data.forEach(w => expect(w.status).toBe('COMPLETED'))
   })
 
+  test('TC-REVIEW-002b · Coach client workouts are returned in chronological (ascending scheduled_date) order', async () => {
+    // Assign two more workouts out of chronological creation order to prove
+    // the response is sorted by scheduled_date, not by insertion/created_at.
+    const laterDate = TOMORROW
+    const earlierDate = YESTERDAY
+    await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Cookie', coachCookies)
+      .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: laterDate, name: 'Chrono_TEST_Later' })
+    await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Cookie', coachCookies)
+      .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: earlierDate, name: 'Chrono_TEST_Earlier' })
+
+    const res = await request(app)
+      .get(`/api/v1/coach/clients/${clientProfileId}/workouts`)
+      .set('Cookie', coachCookies)
+
+    expect(res.status).toBe(200)
+    const dates = res.body.data.map(w => w.scheduled_date)
+    const sorted = [...dates].sort()
+    expect(dates).toEqual(sorted)
+  })
+
   test('TC-REVIEW-003 · Coach views client detail', async () => {
     const res = await request(app)
       .get(`/api/v1/coach/clients/${clientProfileId}`)

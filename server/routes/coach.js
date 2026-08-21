@@ -325,7 +325,7 @@ router.get('/clients/:clientId/workouts', async (req, res, next) => {
     const { rows } = await query(
       `SELECT w.*,
               EXISTS(SELECT 1 FROM reschedule_requests rr WHERE rr.workout_id=w.id AND rr.status='PENDING') AS has_pending_reschedule
-       FROM workouts w WHERE ${where} ORDER BY w.scheduled_date DESC`,
+       FROM workouts w WHERE ${where} ORDER BY w.scheduled_date ASC`,
       params
     )
     res.json({ data: rows })
