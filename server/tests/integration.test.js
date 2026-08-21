@@ -2621,6 +2621,43 @@ describe('Section 28 — History List Integrity', () => {
     expect(Array.isArray(res.body.data)).toBe(true)
     expect(res.body.data).toHaveLength(0)
   })
+
+  test('TC-HISTORY-003 · GET /client/workouts/past?limit=2 includes a total count and respects the limit', async () => {
+    const res = await request(app)
+      .get('/api/v1/client/workouts/past?limit=2')
+      .set('Cookie', clientCookies)
+    expect(res.status).toBe(200)
+    expect(typeof res.body.total).toBe('number')
+    expect(res.body.total).toBeGreaterThanOrEqual(2)
+    expect(res.body.data.length).toBeLessThanOrEqual(2)
+  })
+
+  test('TC-HISTORY-004 · GET /client/workouts/past?limit=1 page=1 vs page=2 return non-overlapping ids', async () => {
+    const page1 = await request(app)
+      .get('/api/v1/client/workouts/past?limit=1&page=1')
+      .set('Cookie', clientCookies)
+    const page2 = await request(app)
+      .get('/api/v1/client/workouts/past?limit=1&page=2')
+      .set('Cookie', clientCookies)
+
+    expect(page1.body.data).toHaveLength(1)
+    expect(page2.body.data).toHaveLength(1)
+    expect(page1.body.data[0].id).not.toBe(page2.body.data[0].id)
+  })
+
+  test('TC-HISTORY-005 · Unlinked CLIENT gets total: 0 from GET /client/workouts/past', async () => {
+    const login = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'history_unlinked_test@example.com', password: 'TestPassword123' })
+    const unlinkedCookies = login.headers['set-cookie']
+
+    const res = await request(app)
+      .get('/api/v1/client/workouts/past')
+      .set('Cookie', unlinkedCookies)
+    expect(res.status).toBe(200)
+    expect(res.body.data).toEqual([])
+    expect(res.body.total).toBe(0)
+  })
 })
 
 // =============================================================================
