@@ -3862,4 +3862,25 @@ describe('Section 35 — Series', () => {
       .set('Cookie', coachCookies)
     expect(detailRes.status).toBe(404)
   })
+
+  test('TC-SER-017 · Unlinked CLIENT gets [] from GET /series (not a 404 error page)', async () => {
+    // Mirrors TC-HISTORY-002's precedent for /client/workouts — a CLIENT not yet
+    // linked to a coach is a normal, expected state, not an error. Regression
+    // test for a real bug: resolveVisibleCoachId used to throw 404 here, and the
+    // frontend has no error handling on this query, so the page rendered blank
+    // with no message at all instead of the "no series yet" empty state.
+    await request(app)
+      .post('/api/v1/auth/register')
+      .send({ email: 'series_unlinked_test@example.com', password: 'TestPassword123', first_name: 'Series', last_name: 'Unlinked', role: 'CLIENT' })
+    const login = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'series_unlinked_test@example.com', password: 'TestPassword123' })
+    const unlinkedCookies = login.headers['set-cookie']
+
+    const res = await request(app)
+      .get('/api/v1/series')
+      .set('Cookie', unlinkedCookies)
+    expect(res.status).toBe(200)
+    expect(res.body.data).toEqual([])
+  })
 })
