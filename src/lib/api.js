@@ -3,14 +3,31 @@ import { useAuthStore } from '@/features/auth/store/authStore'
 
 // In-memory CSRF token — populated on app load and refreshed every 4 min.
 // tiny-csrf reads it from req.body._csrf, so we inject it into every mutating request.
+//
+// tiny-csrf tokens are one-time-use: it clears the server-side cookie on every
+// successful mutating request, so we must fetch a replacement before the next
+// one goes out. That refetch is itself an async request — if a second mutation
+// fires while it's still in flight, it would attach the now-stale token (the
+// cookie behind it has already been cleared) and get rejected with CSRF_INVALID.
+// _csrfRefreshPromise lets the request interceptor await any in-flight refresh
+// before sending, so a rapid sequence of mutations (e.g. edit one exercise,
+// then immediately delete another) can't race.
 let _csrfToken = null
-export function setCsrfToken(token) { _csrfToken = token }
+let _csrfRefreshPromise = null
 
 export const api = axios.create({
   baseURL:         import.meta.env.VITE_API_URL ?? '/api/v1',
   headers:         { 'Content-Type': 'application/json' },
   withCredentials: true, // send the httpOnly JWT cookie on every request
 })
+
+export function refreshCsrfToken() {
+  _csrfRefreshPromise = api.get('/csrf-token')
+    .then(r => { _csrfToken = r.data.csrfToken })
+    .catch(() => {})
+    .finally(() => { _csrfRefreshPromise = null })
+  return _csrfRefreshPromise
+}
 
 const MUTATING = ['post', 'put', 'patch', 'delete']
 
@@ -19,7 +36,7 @@ api.interceptors.response.use(
     // tiny-csrf clears the cookie after every successful mutating request (one-time token).
     // Re-fetch immediately so the next request has a valid token ready.
     if (MUTATING.includes(res.config?.method?.toLowerCase())) {
-      api.get('/csrf-token').then(r => setCsrfToken(r.data.csrfToken)).catch(() => {})
+      refreshCsrfToken()
     }
     return res
   },
@@ -35,12 +52,17 @@ api.interceptors.response.use(
 
 // Inject CSRF token into every mutating request body.
 // tiny-csrf reads req.body._csrf — we merge it in here so callers don't need to.
-api.interceptors.request.use(config => {
-  if (_csrfToken && MUTATING.includes(config.method?.toLowerCase())) {
-    if (config.data instanceof FormData) {
-      config.data.append('_csrf', _csrfToken)
-    } else {
-      config.data = { _csrf: _csrfToken, ...(config.data ?? {}) }
+// Awaits any in-flight refresh first so a request can never race a token
+// invalidated by the mutation immediately before it (see comment above).
+api.interceptors.request.use(async config => {
+  if (MUTATING.includes(config.method?.toLowerCase())) {
+    if (_csrfRefreshPromise) await _csrfRefreshPromise
+    if (_csrfToken) {
+      if (config.data instanceof FormData) {
+        config.data.append('_csrf', _csrfToken)
+      } else {
+        config.data = { _csrf: _csrfToken, ...(config.data ?? {}) }
+      }
     }
   }
   return config
