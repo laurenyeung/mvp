@@ -7,6 +7,7 @@ import {
   progressSchema,
   uuidSchema,
   commentSchema,
+  paginationSchema,
 } from '../middleware/validate.js'
 import { logger } from '../lib/logger.js'
 
@@ -78,17 +79,28 @@ router.get('/workouts/upcoming', async (req, res, next) => {
 router.get('/workouts/past', async (req, res, next) => {
   try {
     const { rows: cpPast } = await query('SELECT id FROM client_profiles WHERE user_id=$1', [req.user.id])
-    if (!cpPast.length) return res.json({ data: [] })
+    if (!cpPast.length) return res.json({ data: [], total: 0 })
     const clientId = cpPast[0].id
     const today = req.query.date || new Date().toISOString().split('T')[0]
+
+    const pagination = paginationSchema.safeParse(req.query)
+    const { limit, page } = pagination.success ? pagination.data : { limit: 40, page: 1 }
+    const offset = (page - 1) * limit
+
+    const { rows: countRows } = await query(
+      `SELECT COUNT(*) FROM workouts WHERE client_id=$1 AND (scheduled_date < $2 OR status = 'COMPLETED')`,
+      [clientId, today]
+    )
+    const total = Number(countRows[0].count)
+
     const { rows } = await query(
       `SELECT * FROM workouts
        WHERE client_id=$1 AND (scheduled_date < $2 OR status = 'COMPLETED')
-       ORDER BY scheduled_date DESC LIMIT 40`,
-      [clientId, today]
+       ORDER BY scheduled_date DESC LIMIT $3 OFFSET $4`,
+      [clientId, today, limit, offset]
     )
     const enriched = await attachExercises(rows)
-    res.json({ data: enriched })
+    res.json({ data: enriched, total })
   } catch (err) { next(err) }
 })
 
