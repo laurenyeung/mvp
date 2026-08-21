@@ -84,7 +84,7 @@ export const exercisesApi = {
 }
 
 export const seriesApi = {
-  list:   ()             => api.get('/series'),
+  list:   (params)       => api.get('/series', { params }),
   get:    (id)           => api.get(`/series/${id}`),
   create: (body)         => api.post('/series', body),
   update: (id, body)     => api.put(`/series/${id}`, body),

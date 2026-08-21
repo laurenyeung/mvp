@@ -4,7 +4,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, Layers, ChevronRight } from 'lucide-react'
 import { seriesApi } from '@/lib/api'
 import { useAuthStore } from '@/features/auth/store/authStore'
+import Pager from '@/components/shared/Pager.jsx'
 import SeriesBuilderModal from '../components/SeriesBuilderModal.jsx'
+
+const PAGE_SIZE = 15
 
 export default function SeriesListPage() {
   const { user } = useAuthStore()
@@ -14,11 +17,14 @@ export default function SeriesListPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [editSeries, setEditSeries] = useState(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const [page, setPage] = useState(1)
 
-  const { data: series, isLoading } = useQuery({
-    queryKey: ['series'],
-    queryFn: () => seriesApi.list().then(r => r.data.data),
+  const { data: result, isLoading } = useQuery({
+    queryKey: ['series', page],
+    queryFn: () => seriesApi.list({ limit: PAGE_SIZE, page }).then(r => r.data),
   })
+  const series = result?.data
+  const totalPages = Math.max(1, Math.ceil((result?.total ?? 0) / PAGE_SIZE))
 
   const { mutate: deleteSeries } = useMutation({
     mutationFn: (id) => seriesApi.delete(id),
@@ -89,6 +95,7 @@ export default function SeriesListPage() {
               </div>
             </div>
           ))}
+          <Pager page={page} totalPages={totalPages} onChange={setPage} />
         </div>
       )}
 
