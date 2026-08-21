@@ -151,7 +151,16 @@ router.delete('/:id', requireRole('COACH', 'ADMIN'), async (req, res, next) => {
       return res.status(403).json({ error: { code: 'NOT_YOUR_RESOURCE', message: 'Forbidden' } })
     }
 
-    await query('DELETE FROM exercises WHERE id=$1', [idParsed.data])
+    try {
+      await query('DELETE FROM exercises WHERE id=$1', [idParsed.data])
+    } catch (err) {
+      if (err.code === '23503') {
+        return res.status(409).json({
+          error: { code: 'CONFLICT', message: 'This exercise is used in a template, series, or logged workout and cannot be deleted' },
+        })
+      }
+      throw err
+    }
     logger.info('EXERCISE_DELETED', { exerciseId: idParsed.data, userId: req.user.id, requestId: req.id })
     res.json({ data: { deleted: true } })
   } catch (err) { next(err) }
