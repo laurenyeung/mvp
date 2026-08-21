@@ -75,18 +75,13 @@ export default function SeriesDetailPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {pageExercises?.map((ex, i) => (
+          {pageExercises?.map(ex => (
             <div key={ex.id} className="card overflow-hidden">
-              <div className="flex items-start gap-3 p-4">
-                <div className="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold text-brand-600">
-                  {(page - 1) * PAGE_SIZE + i + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 text-sm">{ex.name}</p>
-                  {ex.description && (
-                    <p className="text-xs text-gray-400 mt-1 line-clamp-2">{ex.description}</p>
-                  )}
-                </div>
+              <div className="p-4">
+                <p className="font-semibold text-gray-900 text-sm">{ex.name}</p>
+                {ex.description && (
+                  <p className="text-xs text-gray-400 mt-1 line-clamp-2">{ex.description}</p>
+                )}
               </div>
               {ex.youtube_url && (
                 <div className="px-4 pb-3">
