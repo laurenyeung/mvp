@@ -1,11 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Dumbbell, Pencil } from 'lucide-react'
 import { seriesApi } from '@/lib/api'
 import { useAuthStore } from '@/features/auth/store/authStore'
 import YouTubeDemoEmbed from '@/components/shared/YouTubeDemoEmbed.jsx'
+import Pager from '@/components/shared/Pager.jsx'
 import SeriesBuilderModal from '../components/SeriesBuilderModal.jsx'
+
+const PAGE_SIZE = 15
 
 export default function SeriesDetailPage() {
   const { id } = useParams()
@@ -13,11 +16,17 @@ export default function SeriesDetailPage() {
   const { user } = useAuthStore()
   const isCoach = user?.role !== 'CLIENT'
   const [editing, setEditing] = useState(false)
+  const [page, setPage] = useState(1)
+
+  useEffect(() => { setPage(1) }, [id])
 
   const { data: series, isLoading } = useQuery({
     queryKey: ['series', id],
     queryFn: () => seriesApi.get(id).then(r => r.data.data),
   })
+
+  const totalPages = Math.max(1, Math.ceil((series?.exercises?.length ?? 0) / PAGE_SIZE))
+  const pageExercises = series?.exercises?.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   if (isLoading) {
     return (
@@ -66,11 +75,11 @@ export default function SeriesDetailPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {series.exercises?.map((ex, i) => (
+          {pageExercises?.map((ex, i) => (
             <div key={ex.id} className="card overflow-hidden">
               <div className="flex items-start gap-3 p-4">
                 <div className="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold text-brand-600">
-                  {i + 1}
+                  {(page - 1) * PAGE_SIZE + i + 1}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 text-sm">{ex.name}</p>
@@ -86,6 +95,7 @@ export default function SeriesDetailPage() {
               )}
             </div>
           ))}
+          <Pager page={page} totalPages={totalPages} onChange={setPage} />
         </div>
       )}
 
