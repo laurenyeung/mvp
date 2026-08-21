@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { query, transaction } from '../db/pool.js'
 import { requireAuth, requireRole } from '../middleware/auth.js'
-import { createSeriesSchema, updateSeriesSchema, uuidSchema } from '../middleware/validate.js'
+import { createSeriesSchema, updateSeriesSchema, uuidSchema, paginationSchema } from '../middleware/validate.js'
 import { logger } from '../lib/logger.js'
 
 const router = Router()
@@ -29,7 +29,18 @@ async function resolveVisibleCoachId(user) {
 router.get('/', async (req, res, next) => {
   try {
     const coachId = await resolveVisibleCoachId(req.user)
-    if (!coachId) return res.json({ data: [] })
+    if (!coachId) return res.json({ data: [], total: 0 })
+
+    const pagination = paginationSchema.safeParse(req.query)
+    const { limit, page } = pagination.success ? pagination.data : { limit: 40, page: 1 }
+    const offset = (page - 1) * limit
+
+    const { rows: countRows } = await query(
+      `SELECT COUNT(*) FROM series WHERE coach_id=$1 AND is_archived=false`,
+      [coachId]
+    )
+    const total = Number(countRows[0].count)
+
     const { rows } = await query(
       `SELECT s.*,
          COALESCE(
@@ -44,10 +55,11 @@ router.get('/', async (req, res, next) => {
        LEFT JOIN series_exercises se ON se.series_id = s.id
        LEFT JOIN exercises e ON e.id = se.exercise_id
        WHERE s.coach_id=$1 AND s.is_archived=false
-       GROUP BY s.id ORDER BY s.created_at DESC`,
-      [coachId]
+       GROUP BY s.id ORDER BY s.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [coachId, limit, offset]
     )
-    res.json({ data: rows })
+    res.json({ data: rows, total })
   } catch (err) { next(err) }
 })
 

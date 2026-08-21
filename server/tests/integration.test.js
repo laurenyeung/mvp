@@ -3882,5 +3882,39 @@ describe('Section 35 — Series', () => {
       .set('Cookie', unlinkedCookies)
     expect(res.status).toBe(200)
     expect(res.body.data).toEqual([])
+    expect(res.body.total).toBe(0)
+  })
+
+  test('TC-SER-018 · GET /series?limit=1 includes a total count and respects the limit', async () => {
+    // seriesId was archived in TC-SER-016 — create two fresh ones for pagination coverage
+    await request(app)
+      .post('/api/v1/series')
+      .set('Cookie', coachCookies)
+      .send({ title: 'Series_pag_test_1' })
+    await request(app)
+      .post('/api/v1/series')
+      .set('Cookie', coachCookies)
+      .send({ title: 'Series_pag_test_2' })
+
+    const res = await request(app)
+      .get('/api/v1/series?limit=1')
+      .set('Cookie', coachCookies)
+    expect(res.status).toBe(200)
+    expect(typeof res.body.total).toBe('number')
+    expect(res.body.total).toBeGreaterThanOrEqual(2)
+    expect(res.body.data.length).toBeLessThanOrEqual(1)
+  })
+
+  test('TC-SER-019 · GET /series?limit=1 page=1 vs page=2 return non-overlapping ids', async () => {
+    const page1 = await request(app)
+      .get('/api/v1/series?limit=1&page=1')
+      .set('Cookie', coachCookies)
+    const page2 = await request(app)
+      .get('/api/v1/series?limit=1&page=2')
+      .set('Cookie', coachCookies)
+
+    expect(page1.body.data).toHaveLength(1)
+    expect(page2.body.data).toHaveLength(1)
+    expect(page1.body.data[0].id).not.toBe(page2.body.data[0].id)
   })
 })
