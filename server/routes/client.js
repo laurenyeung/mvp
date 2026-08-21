@@ -84,7 +84,7 @@ router.get('/workouts/past', async (req, res, next) => {
     const { rows } = await query(
       `SELECT * FROM workouts
        WHERE client_id=$1 AND (scheduled_date < $2 OR status = 'COMPLETED')
-       ORDER BY scheduled_date DESC LIMIT 40`,
+       ORDER BY scheduled_date ASC LIMIT 40`,
       [clientId, today]
     )
     const enriched = await attachExercises(rows)

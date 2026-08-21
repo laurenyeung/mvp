@@ -2621,6 +2621,24 @@ describe('Section 28 — History List Integrity', () => {
     expect(Array.isArray(res.body.data)).toBe(true)
     expect(res.body.data).toHaveLength(0)
   })
+
+  test('TC-HISTORY-003 · GET /client/workouts/past returns workouts in chronological (ascending) order', async () => {
+    // Matches the convention on GET /coach/clients/:clientId/workouts (TC-REVIEW-002b) —
+    // both views of a client's workout list should sort the same way.
+    await request(app)
+      .post('/api/v1/coach/workouts/assign')
+      .set('Cookie', coachCookies)
+      .send({ template_id: templateId, client_id: clientProfileId, scheduled_date: YESTERDAY, name: 'HistoryChrono_TEST_Earlier' })
+
+    const res = await request(app)
+      .get('/api/v1/client/workouts/past')
+      .set('Cookie', clientCookies)
+
+    expect(res.status).toBe(200)
+    const dates = res.body.data.map(w => w.scheduled_date)
+    const sorted = [...dates].sort()
+    expect(dates).toEqual(sorted)
+  })
 })
 
 // =============================================================================
