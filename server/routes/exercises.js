@@ -69,6 +69,12 @@ router.post('/', requireRole('COACH', 'ADMIN'), async (req, res, next) => {
     }
     const { name, description, equipment_required, is_public, youtube_url } = parsed.data
 
+    // Exercise names are shared across all coaches — duplicate check is global, not per-coach.
+    const { rows: dupe } = await query('SELECT id FROM exercises WHERE LOWER(name)=LOWER($1)', [name])
+    if (dupe.length) {
+      return res.status(409).json({ error: { code: 'CONFLICT', message: 'An exercise with that name already exists' } })
+    }
+
     const { rows } = await query(
       `INSERT INTO exercises
          (name, description, equipment_required, created_by, is_public, youtube_url)
@@ -101,6 +107,16 @@ router.patch('/:id', requireRole('COACH', 'ADMIN'), async (req, res, next) => {
     }
 
     const data = parsed.data
+    if (data.name !== undefined) {
+      const { rows: dupe } = await query(
+        'SELECT id FROM exercises WHERE LOWER(name)=LOWER($1) AND id != $2',
+        [data.name, idParsed.data]
+      )
+      if (dupe.length) {
+        return res.status(409).json({ error: { code: 'CONFLICT', message: 'An exercise with that name already exists' } })
+      }
+    }
+
     const sets = []
     const params = []
     for (const key of ['name', 'description', 'is_public', 'youtube_url']) {

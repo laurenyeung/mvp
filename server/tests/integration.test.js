@@ -372,6 +372,46 @@ describe('Section 2 — Exercise Library', () => {
     expect(page2.body.data).toHaveLength(1)
     expect(page1.body.data[0].id).not.toBe(page2.body.data[0].id)
   })
+
+  test('TC-EXERCISE-008 · Creating an exercise with a name that already exists returns 409', async () => {
+    const res = await request(app)
+      .post('/api/v1/exercises')
+      .set('Cookie', coachCookies)
+      .send({ name: 'Barbell_TEST_Squat' })
+    expect(res.status).toBe(409)
+    expect(res.body.error.code).toBe('CONFLICT')
+
+    const { rows } = await testPool.query('SELECT id FROM exercises WHERE name=$1', ['Barbell_TEST_Squat'])
+    expect(rows).toHaveLength(1) // still just the original
+  })
+
+  test('TC-EXERCISE-009 · Duplicate name check is case-insensitive', async () => {
+    const res = await request(app)
+      .post('/api/v1/exercises')
+      .set('Cookie', coachCookies)
+      .send({ name: 'barbell_test_squat' })
+    expect(res.status).toBe(409)
+  })
+
+  test('TC-EXERCISE-010 · PATCH renaming an exercise to collide with another returns 409, name unchanged', async () => {
+    const res = await request(app)
+      .patch(`/api/v1/exercises/${exercise2Id}`)
+      .set('Cookie', coachCookies)
+      .send({ name: 'Barbell_TEST_Squat' })
+    expect(res.status).toBe(409)
+
+    const { rows } = await testPool.query('SELECT name FROM exercises WHERE id=$1', [exercise2Id])
+    expect(rows[0].name).toBe('Romanian_TEST_Deadlift')
+  })
+
+  test('TC-EXERCISE-011 · PATCH re-sending an exercise\'s own current name is not blocked', async () => {
+    const res = await request(app)
+      .patch(`/api/v1/exercises/${exerciseId}`)
+      .set('Cookie', coachCookies)
+      .send({ name: 'Barbell_TEST_Squat', description: 'Updated desc' })
+    expect(res.status).toBe(200)
+    expect(res.body.data.description).toBe('Updated desc')
+  })
 })
 
 // =============================================================================
@@ -2130,6 +2170,15 @@ describe('Section 24 — Exercise Ownership Enforcement', () => {
       .set('Cookie', coach2Cookies)
     expect(res.status).toBe(200)
     expect(res.body.data.id).toBe(exerciseId)
+  })
+
+  test('TC-EX-OWNER-DUPE-001 · Duplicate name check is global — a different coach cannot reuse an existing name', async () => {
+    const res = await request(app)
+      .post('/api/v1/exercises')
+      .set('Cookie', coach2Cookies)
+      .send({ name: 'Barbell_TEST_Squat' }) // created by coach 1 in Section 2
+    expect(res.status).toBe(409)
+    expect(res.body.error.code).toBe('CONFLICT')
   })
 
   test('TC-EX-OWNER-002 · Coach 1 cannot PATCH Coach 2\'s exercise', async () => {
