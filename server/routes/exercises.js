@@ -28,17 +28,20 @@ router.get('/', async (req, res, next) => {
       params.push(`%${search}%`)
       where += ` AND name ILIKE $${params.length}`
     }
-    params.push(limit, offset)
 
+    const { rows: countRows } = await query(`SELECT COUNT(*) FROM exercises WHERE ${where}`, params)
+    const total = Number(countRows[0].count)
+
+    const selectParams = [...params, limit, offset]
     const { rows } = await query(
       `SELECT id, name, description, equipment_required, is_public, youtube_url, created_by, created_at
        FROM exercises
        WHERE ${where}
        ORDER BY name
-       LIMIT $${params.length - 1} OFFSET $${params.length}`,
-      params
+       LIMIT $${selectParams.length - 1} OFFSET $${selectParams.length}`,
+      selectParams
     )
-    res.json({ data: rows })
+    res.json({ data: rows, total })
   } catch (err) { next(err) }
 })
 
