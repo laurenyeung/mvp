@@ -21,8 +21,9 @@ router.get('/', async (req, res, next) => {
 
     const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 100) : null
 
-    const params = [req.user.id]
-    let where = `(is_public=true OR created_by=$1)`
+    // All exercises are visible to every coach — there is no per-coach privacy tier.
+    const params = []
+    let where = 'TRUE'
     if (search) {
       params.push(`%${search}%`)
       where += ` AND name ILIKE $${params.length}`
