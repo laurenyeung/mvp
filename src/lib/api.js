@@ -131,7 +131,7 @@ function localDateStr() {
 export const clientApi = {
   todayWorkout:    ()       => api.get('/client/workouts/today',    { params: { date: localDateStr() } }),
   upcomingWorkouts:()       => api.get('/client/workouts/upcoming', { params: { date: localDateStr() } }),
-  pastWorkouts:    ()       => api.get('/client/workouts/past',     { params: { date: localDateStr() } }),
+  pastWorkouts:    (params) => api.get('/client/workouts/past',     { params: { date: localDateStr(), ...params } }),
   listWorkouts:    (params) => api.get('/client/workouts', { params }),
   getWorkout:      (id)     => api.get(`/client/workouts/${id}`),
   logWorkout:           (workoutId, body) => api.post(`/client/workouts/${workoutId}/log`, body),

@@ -1,9 +1,13 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { Calendar, CheckCircle2, XCircle, Clock } from 'lucide-react'
 import { clientApi } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import Pager from '@/components/shared/Pager.jsx'
+
+const PAGE_SIZE = 15
 
 const STATUS_STYLES = {
   COMPLETED:  { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50', label: 'Completed' },
@@ -25,10 +29,13 @@ function resolveStatus(w) {
 
 export default function WorkoutHistoryPage() {
   const navigate = useNavigate()
-  const { data: workouts, isLoading, isError } = useQuery({
-    queryKey: ['workouts-history'],
-    queryFn: () => clientApi.pastWorkouts().then(r => r.data.data),
+  const [page, setPage] = useState(1)
+  const { data: result, isLoading, isError } = useQuery({
+    queryKey: ['workouts-history', page],
+    queryFn: () => clientApi.pastWorkouts({ limit: PAGE_SIZE, page }).then(r => r.data),
   })
+  const workouts = result?.data
+  const totalPages = Math.max(1, Math.ceil((result?.total ?? 0) / PAGE_SIZE))
 
   return (
     <div className="max-w-lg mx-auto px-4 py-6">
@@ -67,6 +74,7 @@ export default function WorkoutHistoryPage() {
               </div>
             )
           })}
+          <Pager page={page} totalPages={totalPages} onChange={setPage} />
         </div>
       )}
     </div>
