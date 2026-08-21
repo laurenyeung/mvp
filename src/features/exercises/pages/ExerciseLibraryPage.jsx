@@ -5,7 +5,10 @@ import { exercisesApi } from '@/lib/api'
 import { useAuthStore } from '@/features/auth/store/authStore'
 import { getYouTubeId } from '@/lib/youtube'
 import YouTubeDemoEmbed from '@/components/shared/YouTubeDemoEmbed.jsx'
+import Pager from '@/components/shared/Pager.jsx'
 import CreateExerciseModal from '../components/CreateExerciseModal.jsx'
+
+const PAGE_SIZE = 15
 
 function ExerciseCard({ ex, user, onEdit }) {
   const ytId = getYouTubeId(ex.youtube_url)
@@ -72,13 +75,21 @@ function ExerciseCard({ ex, user, onEdit }) {
 export default function ExerciseLibraryPage() {
   const { user } = useAuthStore()
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [showCreate, setShowCreate] = useState(false)
   const [editExercise, setEditExercise] = useState(null)
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['exercises', search],
-    queryFn: () => exercisesApi.list({ search, limit: 40 }).then(r => r.data.data),
+  const { data: result, isLoading } = useQuery({
+    queryKey: ['exercises', search, page],
+    queryFn: () => exercisesApi.list({ search, limit: PAGE_SIZE, page }).then(r => r.data),
   })
+  const data = result?.data
+  const totalPages = Math.max(1, Math.ceil((result?.total ?? 0) / PAGE_SIZE))
+
+  const handleSearchChange = (value) => {
+    setSearch(value)
+    setPage(1)
+  }
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
@@ -97,12 +108,12 @@ export default function ExerciseLibraryPage() {
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => handleSearchChange(e.target.value)}
           placeholder="Search exercises…"
           className="input pl-10"
         />
         {search && (
-          <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+          <button onClick={() => handleSearchChange('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
             <X size={16} />
           </button>
         )}
@@ -126,6 +137,8 @@ export default function ExerciseLibraryPage() {
           {data?.map(ex => <ExerciseCard key={ex.id} ex={ex} user={user} onEdit={setEditExercise} />)}
         </div>
       )}
+
+      <Pager page={page} totalPages={totalPages} onChange={setPage} />
 
       {showCreate && <CreateExerciseModal onClose={() => setShowCreate(false)} />}
       {editExercise && <CreateExerciseModal exercise={editExercise} onClose={() => setEditExercise(null)} />}
